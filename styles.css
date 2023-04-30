@@ -1,0 +1,12 @@
+.quote {
+    color: black;
+    padding: 10px;
+    font-size: small;
+    font: italic;
+    background: #eee;
+    border-radius: 5px;
+  }
+
+  .heading {
+    text-align: center; 
+  }
