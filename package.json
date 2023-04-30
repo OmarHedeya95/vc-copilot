@@ -1,6 +1,6 @@
 {
 	"name": "vc-copilot-plugin",
-	"version": "0.0.1",
+	"version": "1.0.0",
 	"description": "A plugin that can summarize VC notes and automatically push them to Affinity",
 	"main": "main.js",
 	"scripts": {
