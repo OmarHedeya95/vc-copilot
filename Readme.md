@@ -1,8 +1,47 @@
+# Explanation
+This plugin uses GPT-4 to support a venture capitalist (VC) with some of their daily tasks. This includes the following:
+- Summarizing your notes after a call with a startup or another fund
+- Pushing the information to your CRM (currently only supporting [Affinity](https://www.affinity.co/))
+- Given a startup description, it generates the core problem the startup is trying to solve and hypotheses that needs to be validated for the startup to be successful.
+- Given a startup description, it analyzes what could make the startup defensible based on some of the articles published by Elad Gil on the topic.
+
+<details>
+<summary> Summarization and CRM syncing Demo </summary>
+
+## Summarization and Affinity Sync
+![screen-gif](./gifs/vc_wizard.gif)
+
+</details>
+
+<details>
+
+<details>
+<summary> Startup DD</summary>
+
+## Startup DD support
+![screen-gif](./gifs/dd.gif)
+
+</details>
+
+<details>
+
+<summary> Defensibility Analysis</summary>
+
+## Startup DD support
+![screen-gif](./gifs/defensibility.gif.gif)
+
+</details>
+
+<details>
+
+
+
+
 # Setup Steps
 - Clone this repo into `<obsidian-vault-path>/.obsidian/plugins/vc_copilot/`
 
 ## Settings
-- The Affinity settings are only needed if you are using Affinity as CRM and would like to automatically push startups and VC connections there. If you are just using it for summarization and cleaning it from markdown syntax, just fill the other settings
+- The Affinity settings are only needed if you are using Affinity as CRM tool and would like to automatically push startups and VC connections there. If you are just using it for summarization and cleaning it from markdown syntax, just fill the other settings
 - Do not forget to have a '/' at the end of the vault path (otherwise it won't work)
 
 # Usage
@@ -12,8 +51,21 @@
 - To summarize:
 	- For a startup -> use the mouse to highlight the text you want to summarize -> `Cmd + P` -> summarize this startup
 	- For a VC -> `Cmd + P` -> Summarize All VC Notes
-- Check the #review and #review_startup hashtags
-- Approve that everything is fine or make your changes to the summary
-- Remove the #review (or #review_startup ) hashtag and add ( #Affinity ) instead
-- `Cmd + P` -> Push VCs or Startups to Affinity
-- Voila, data is pushed to Affinity ( the affinity hashtag will be removed automatically)
+
+- To push data to Affinity:
+	- Check the #review and #review_startup hashtags
+	- Approve that everything is fine or make your changes to the summary
+	- Remove the #review (or #review_startup ) hashtag and add ( #Affinity ) instead
+	- `Cmd + P` -> Push VCs or Startups to Affinity
+	- Voila, data is pushed to Affinity ( the affinity hashtag will be removed automatically)
+
+- To generate core problem and hypotheses to guide you with your DD:
+	- `Cmd + P` -> Startup Guidance Workflow -> copy a description of the startup as detailed as possible
+
+- To test the defensibility of a startup:
+	- `Cmd + P` -> Evaluate Startup Defensibility -> copy a description of the startup as detailed as possible
+
+ 
+## External Tools Used
+- OpenAI; providing GPT-4
+- Affinity.co; using their APIs to push data to their CRM

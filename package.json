@@ -1,7 +1,7 @@
 {
 	"name": "vc-copilot-plugin",
 	"version": "1.0.0",
-	"description": "A plugin that uses GPT-4 to summarize (VC-related) notes and push them to Affinity CRM",
+	"description": "Supports venture capitalists with their daily work; summarization, syncing with CRM (Customer Relationship Management) tool, providing guidelines for due diligence, and testing defensibility of a startup",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
