@@ -13,26 +13,20 @@ This plugin uses GPT-4 to support a venture capitalist (VC) with some of their d
 
 </details>
 
-<details>
 
 <details>
 <summary> Startup DD</summary>
 
 ## Startup DD support
 ![screen-gif](./gifs/dd.gif)
-
 </details>
 
 <details>
-
 <summary> Defensibility Analysis</summary>
 
 ## Startup DD support
 ![screen-gif](./gifs/defensibility.gif.gif)
-
 </details>
-
-<details>
 
 
 
