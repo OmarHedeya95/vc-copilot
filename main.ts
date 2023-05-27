@@ -5,6 +5,7 @@ import { execSync } from 'child_process';
 const { Configuration, OpenAIApi } = require("openai");
 import {get_startup_by_name, add_notes_to_company, get_person_by_name, get_person_details, is_person_in_venture_network, get_field_values, add_entry_to_list, add_field_value, add_notes_to_person} from "./utils";
 import { start } from 'repl';
+import { TextInputModal } from 'modal';
 
 
 
@@ -39,7 +40,7 @@ const DEFAULT_SETTINGS: ButlerSettings = {
 }
 
 
-async function openai_js(query: String, system_prompt: String){
+async function openai_js(query: String, system_prompt: String, max_tokens: number = 256, temperature: number = 0.3){
     const configuration = new Configuration({
         apiKey: openaiAPIKey,
       });
@@ -51,7 +52,8 @@ async function openai_js(query: String, system_prompt: String){
       
     const response = await openai.createChatCompletion({
         model: "gpt-4",
-        temperature: 0.3,
+        temperature: temperature,
+        max_tokens: max_tokens,
         messages: [
             {role: "system", content: system_message},
             {role: "user", content: query} 
@@ -60,6 +62,37 @@ async function openai_js(query: String, system_prompt: String){
     
     let summary = response.data.choices[0].message.content
     return summary
+}
+
+async function openai_js_multiturn(queries: string[], system_prompt: String, max_tokens: number = 256, temperature: number = 0.3){
+    const configuration = new Configuration({
+        apiKey: openaiAPIKey,
+      });
+      //to avoid an annoying error/warning message
+      delete configuration.baseOptions.headers['User-Agent'];
+
+      const openai = new OpenAIApi(configuration);
+      const system_message = system_prompt
+
+      let messages = [{role: "system", content: system_message}]
+      let replies = []
+ 
+    for (let query of queries){
+        messages.push({role: "user", content: query})
+        console.log(messages)
+        const response = await openai.createChatCompletion({
+            model: "gpt-4",
+            temperature: temperature,
+            max_tokens: max_tokens,
+            messages: messages
+          });
+        let assistant_reply = response.data.choices[0].message.content
+        messages.push({role: "assistant", content:assistant_reply})
+        replies.push(assistant_reply)
+
+    }
+
+    return replies
 }
 
 async function summarize_selected_startup_text(editor: Editor, view: MarkdownView|MarkdownFileInfo, status: HTMLElement){
@@ -86,7 +119,6 @@ async function summarize_selected_startup_text(editor: Editor, view: MarkdownVie
     editor.replaceSelection(replacement)
     status.setText('🧑‍🚀: VC Copilot ready')
     status.setAttr('title', 'Copilot is ready')
-
 }
 
 function startup_ready_for_affinity(file_content: string){
@@ -355,6 +387,8 @@ async function push_vcs_to_affinity(status: HTMLElement){
 
 
 
+
+
 export default class VCCopilotPlugin extends Plugin{
     settings: ButlerSettings;
     status: HTMLElement;
@@ -370,6 +404,36 @@ export default class VCCopilotPlugin extends Plugin{
         this.addCommand({id: 'affinity-startup', name: 'Push Startups to Affinity', callback: () => push_startups_to_affinity(this.status)})
         this.addCommand({id: 'summarize-all-vc-command', name: 'Summarize All VC Notes', callback: () => summarize_all_vc(this.status)})
         this.addCommand({id: 'affinity-vc', name: 'Push VCs to Affinity', callback: () => push_vcs_to_affinity(this.status)})
+
+        this.addCommand({
+            id: 'startup-defensibility',
+            name: 'Evaluate Startup Defensibility',
+            editorCallback: (editor: Editor) => {
+              const inputModal = new TextInputModal(this.app, 'defensibility',(input) => {
+                // Handle the submitted text here
+                console.log('Submitted text:', input);
+                this.defensibility_analysis(input, editor)
+
+
+              });
+              inputModal.open();
+            },
+          });
+
+          this.addCommand({
+            id: 'startup-workflow',
+            name: 'Startup Guidance Workflow',
+            editorCallback: (editor: Editor) => {
+              const inputModal = new TextInputModal(this.app, 'evaluate',(input) => {
+                // Handle the submitted text here
+                console.log('Submitted text:', input);
+                this.guidance_workflow(input, editor)
+
+
+              });
+              inputModal.open();
+            },
+          });
     }
 
     onunload() {
@@ -398,6 +462,77 @@ export default class VCCopilotPlugin extends Plugin{
         venture_network_list = this.settings.venture_network_list_id
         pythonPath = this.settings.pythonPath
     }
+
+    async defensibility_analysis (startup_description: string, editor: Editor){
+                        
+        let system_prompt: string = "Use the following guidelines to determine what kinds of defensibility a startup can build with time:\n\
+        - **Network effect**: When every user creates more value for other users, forming a positive feedback loop. This can be local or global, and is one of the few forms of defensibility that can arise immediately upon launch of a company.\n\
+        - **Platform effect**: When a company becomes a sticky product because so many other companies have integrated against it. This usually comes after a company has enough users that others want to build against its platform to reach them.\n\
+        - **Integrations**: When a company integrates against many other APIs, code bases, etc. that are hard to reproduce, or when a company's services do integrations for the company against other vendors. This makes it hard to displace the company as each implementation is a unique and complex process.\n\
+        - **Building a ton of stuff**: When a company bundles and cross sells products that prevent other companies from finding a wedge to compete with them, or when a company has a big product footprint that makes it hard for new entrants to reach feature parity.\n\
+        - **Deals**: When a company secures early access, exclusive provider or distribution, or backend deals that give it scale, brand, or access advantages over competitors. This may include deals with APIs, data sources, regulators, or customers.\n\
+        - **Sales as moat**: When a company locks in customers with long term contracts, or has a sales process that makes it easier for enterprises to buy from them than from new suppliers. This may include security reviews, procurement processes, or pricing strategies.\n\
+        - **Regulatory**: When a company receives regulatory approvals that provide a moat. This may include licenses, permits, or exemptions that are hard to obtain or replicate by competitors.\n\
+        - **Data or system of record effect**: When a company has unique or proprietary data, or owns a customer's data or has a long historical record of it. This can create defensibility by making the data more valuable and harder to switch away from. Similarly, being a system of record for a user, entity, etc. can be a powerful position to be in.\n\
+        - **Scale effects**: When a company has access to large sums of money or business volume that allows it to do things that will make it difficult for competitors to upend them. This may include capital scale, business scale and negotiation, or pricing advantages.\n\
+        - **Open source**: When a company benefits from being the creator or contributor of an open source software project that is widely used or adopted by developers. This can create defensibility by giving the company brand recognition, community influence, and talent access.\n\
+        - **Brand**: When a company becomes synonymous with the thing they do, often by creating a new product category, or doing something vastly better than competitors. This can create defensibility by making the company the default choice for customers and creating loyalty and trust.\n\
+        - **IP moat**: When a company has intellectual property that protects its product or technology from being copied or infringed by competitors. This tends to be more effective in hard tech or biotech companies than most consumer or SaaS products.\n\
+        - **Speed**: When a company can execute faster and better than competitors, especially incumbents. This can create defensibility by allowing the company to iterate quickly, respond to customer feedback, and hire and close candidates faster.\n\
+        - **Pricing**: When a company can offer a lower price than competitors due to a lower cost structure, a lack of an existing product to cannibalize, or a different business model. This can create defensibility by attracting more customers and creating higher margins.\n\
+        - **New business models**: When a company can innovate on business model to create a higher leverage business or different incentive structure. This can create defensibility by disrupting incumbents who are used to traditional ways of doing things.\nAlways think step by step!"
+                        
+        let query = 'Startup Description:\n' + startup_description + '\nWhat types of defensibility does this startup have? Which types of defensibility does it lack or could improve upon? Let us think step by step'
+                        
+
+        this.status.setText('🧑‍🚀: VC Copilot analyzing defensibility...')
+        this.status.setAttr('title', 'VC Copilot is analyzing defensibility of the startup...')
+        let analysis = await openai_js(query, system_prompt, 1024, 1.0)
+
+        analysis = '## Defensibility Analysis\n' + analysis
+        
+        editor.replaceRange(analysis, editor.getCursor());
+
+        this.status.setText('🧑‍🚀: VC Copilot ready')
+        this.status.setAttr('title', 'VC Copilot is ready')
+    }
+
+    async guidance_workflow(startup_description: string, editor: Editor){
+        let system_prompt = "You are a helpful assistant to a venture capital investor. Your main job is guiding the investor to always focus on the bigger picture and find the core arguments they should focus us. Your arguments are always concise and to the point. When needed, you can guide the investor by asking questions that help them focus on the essentials.\n\
+In your analysis, you should always be customer-centric and focused on the target customer of the startup.\n\
+The following aspects are extremely crucial to the investor:\n\
+- Who is the target customer for the startup?\n\
+- What is the hardest part about the job of the target customer?\n\
+- What is the startup's unique value proposition for the target customer?"
+
+    let query = 'Startup Description:\n' + startup_description + '\nWhat is the core problem this startup is solving?'
+    let user_queries = []
+    user_queries.push(query)
+    let hypothesis = "What are the core hypotheses the startup has to validate to prove that solving this core problem is important enough to allow them to build a unicorn?"
+    user_queries.push(hypothesis)
+    let classify = "Recommend some suitable product categories to classify the product"
+    user_queries.push(classify)
+
+    this.status.setText('🧑‍🚀: VC Copilot analyzing startup...')
+    this.status.setAttr('title', 'VC Copilot is analyzing the startup...')
+    let replies = await openai_js_multiturn(user_queries, system_prompt, 1024, 1.0)
+
+    replies[0] = '#### Core Problem\n' + replies[0] + '\n'
+    replies[1] = '#### Hypotheses\n' + replies [1] + '\n'
+    replies [2] = '#### Categories\n' + replies[2] + '\n'
+
+    let final_text = replies[0] + replies[1] + replies[2]
+
+    editor.replaceRange(final_text, editor.getCursor());
+
+    this.status.setText('🧑‍🚀: VC Copilot ready')
+    this.status.setAttr('title', 'VC Copilot is ready')
+
+
+
+}
+
+    
 
 }
 
