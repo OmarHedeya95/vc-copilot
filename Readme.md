@@ -33,6 +33,7 @@ This plugin uses GPT-4 to support a venture capitalist (VC) with some of their d
 
 # Setup Steps
 - Clone this repo into `<obsidian-vault-path>/.obsidian/plugins/vc_copilot/`
+- **OR** simply download the files `main.js`, `manifes.json`, and `styles.css`from the latest release into the folder `<obsidian-vault-path>/.obsidian/plugins/vc_copilot/` 
 
 ## Settings
 - The Affinity settings are only needed if you are using Affinity as CRM tool and would like to automatically push startups and VC connections there. If you are just using it for summarization and cleaning it from markdown syntax, just fill the other settings
