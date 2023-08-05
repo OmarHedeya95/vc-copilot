@@ -10,7 +10,7 @@ import { TextInputModal } from 'modal';
 
 
 let pythonPath = ''
-let scriptPath_AI = ''
+//let scriptPath_AI = ''
 let affinityAPIKey = ''
 let openaiAPIKey = ''
 let owner_value = '10'
@@ -18,7 +18,6 @@ let connection_owner_field = '10'
 let venture_network_list = '500'
 
 interface ButlerSettings {
-	vaultPath: string;
     affinityKey: string;
     openAIKey: string;
     owner_person_value: string;
@@ -29,7 +28,6 @@ interface ButlerSettings {
 }
 
 const DEFAULT_SETTINGS: ButlerSettings = {
-	vaultPath: 'default',
     affinityKey: 'default',
     openAIKey: 'default',
     owner_person_value: '10',
@@ -444,7 +442,6 @@ export default class VCCopilotPlugin extends Plugin{
 
     async loadSettings(){
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-        scriptPath_AI = this.settings.vaultPath + '.obsidian/plugins/vc_copilot'
         openaiAPIKey = this.settings.openAIKey
         affinityAPIKey = this.settings.affinityKey
         owner_value = this.settings.owner_person_value
@@ -454,7 +451,6 @@ export default class VCCopilotPlugin extends Plugin{
     }
     async saveSettings(){
         await this.saveData(this.settings)
-        scriptPath_AI = this.settings.vaultPath + '.obsidian/plugins/vc_copilot'
         openaiAPIKey = this.settings.openAIKey
         affinityAPIKey = this.settings.affinityKey
         owner_value = this.settings.owner_person_value
@@ -548,18 +544,6 @@ class VCCopilotSettingsTab extends PluginSettingTab{
 		containerEl.empty();
 
 		containerEl.createEl('h2', {text: 'Settings for your copilot'});
-
-		new Setting(containerEl)
-			.setName('Obsidian Vault Path')
-			.setDesc('The path to the vault where you wish to use the plugin')
-			.addText(text => text
-				.setPlaceholder('Enter path')
-				.setValue(this.plugin.settings.vaultPath)
-				.onChange(async (value) => {
-					console.log('path: ' + value);
-					this.plugin.settings.vaultPath = value;
-					await this.plugin.saveSettings();
-				}));
         new Setting(containerEl)
         .setName('OpenAI API Key')
         .setDesc('Your OpenAI API Key')
@@ -616,17 +600,6 @@ class VCCopilotSettingsTab extends PluginSettingTab{
                 await this.plugin.saveSettings();
             }));
         
-        /*new Setting(containerEl)
-        .setName('Python Virtual Environment Path')
-        .setDesc('The path to python virtual environment')
-        .addText(text => text
-            .setPlaceholder('Enter path')
-            .setValue(this.plugin.settings.pythonPath)
-            .onChange(async (value) => {
-                console.log('PythonPath: ' + value);
-                this.plugin.settings.pythonPath = value;
-                await this.plugin.saveSettings();
-            }));*/
 	}
 
 }
