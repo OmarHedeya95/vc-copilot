@@ -6,16 +6,19 @@ const { Configuration, OpenAIApi } = require("openai");
 import {get_startup_by_name, add_notes_to_company, get_person_by_name, get_person_details, is_person_in_venture_network, get_field_values, add_entry_to_list, add_field_value, add_notes_to_person} from "./utils";
 import { start } from 'repl';
 import { TextInputModal } from 'modal';
+import { exec} from "child_process";
+
 
 
 
 let pythonPath = ''
-//let scriptPath_AI = ''
 let affinityAPIKey = ''
 let openaiAPIKey = ''
 let owner_value = '10'
 let connection_owner_field = '10'
 let venture_network_list = '500'
+let docker_path = '/usr/local/bin'
+let bing_cookie = ''
 
 interface ButlerSettings {
     affinityKey: string;
@@ -23,6 +26,8 @@ interface ButlerSettings {
     owner_person_value: string;
     connection_owner_field_id: string;
     venture_network_list_id: string;
+    _docker_path: string;
+    _U_bing_cookie: string;
     pythonPath: string
 
 }
@@ -33,6 +38,8 @@ const DEFAULT_SETTINGS: ButlerSettings = {
     owner_person_value: '10',
     connection_owner_field_id: '100',
     venture_network_list_id: '500',
+    _docker_path: '/usr/local/bin',
+    _U_bing_cookie: '',
     pythonPath: '<path-to-virtual-env>'
 
 }
@@ -395,8 +402,7 @@ export default class VCCopilotPlugin extends Plugin{
         await this.loadSettings();
         this.addSettingTab(new VCCopilotSettingsTab(this.app, this));
         this.status = this.addStatusBarItem();
-        this.status.setText('🧑‍🚀: VC Copilot ready')
-        this.status.setAttr('title', 'VC Copilot is ready')
+
 
         this.addCommand({id: 'summarize-startup-command', name: 'Summarize This Startup', editorCallback: (editor, view) => summarize_selected_startup_text(editor, view, this.status)})
         this.addCommand({id: 'affinity-startup', name: 'Push Startups to Affinity', callback: () => push_startups_to_affinity(this.status)})
@@ -432,11 +438,100 @@ export default class VCCopilotPlugin extends Plugin{
               inputModal.open();
             },
           });
+
+
+        this.addCommand({
+            id: 'market-map-command',
+            name: 'Market Map',
+            editorCallback: (editor: Editor) => {
+              const inputModal = new TextInputModal(this.app, 'market-research',(input) => {
+                // Handle the submitted text here
+                console.log('Submitted text:', input);
+                this.market_map(input, editor);
+
+              });
+              inputModal.open();
+            },
+          });
+
+          this.addCommand({
+            id: 'market-research-command',
+            name: 'Market Research',
+            editorCallback: (editor: Editor) => {
+              const inputModal = new TextInputModal(this.app, 'market-research',(input) => {
+                // Handle the submitted text here
+                console.log('Submitted text:', input);
+                this.market_research(input, editor);
+
+              });
+              inputModal.open();
+            },
+          });
+
+          this.addCommand({
+            id: 'url-research-command',
+            name: 'Url Research',
+            editorCallback: (editor: Editor) => {
+              const inputModal = new TextInputModal(this.app, 'Url Research',(input) => {
+                // Handle the submitted text here
+                console.log('Submitted text:', input);
+                this.url_research(input, editor);
+
+              });
+              inputModal.open();
+            },
+          });
+
+        this.status.setText('🧑‍🚀: VC Copilot loading....')
+        this.status.setAttr('title', 'VC Copilot is loading...')
+
+        exec(`export PATH=$PATH:${docker_path} && docker run -p 8080:8080 -d omar/expressjs:1.0`, (error, stdout, stderr) => {
+            if(error){
+                console.error(`JS container creation error: ${error}`); 
+                new Notice('Could not run JS container'); 
+                return;
+            }
+            console.log(`stdout (JS creation of container): ${stdout}`)
+            console.log(`stderr (JS creation of container): ${stderr}`)
+            new Notice('JS container created')
+
+        })
+
+        exec(`export PATH=$PATH:${docker_path} && docker run -p 3030:3030 -d copilot/python_server:1.0`, (error, stdout, stderr) => {
+            if(error){
+                console.error(`Python container creation error: ${error}`); 
+                new Notice('Could not run Python container'); 
+                return;
+            }
+            console.log(`stdout (python creation of container): ${stdout}`)
+            console.log(`stderr (python creation of container): ${stderr}`)
+            new Notice('Python container created')
+
+        })
+
+        this.status.setText('🧑‍🚀: VC Copilot ready')
+        this.status.setAttr('title', 'VC Copilot is ready')
+    
+    
+    
     }
 
     onunload() {
         this.status.setText('🧑‍🚀: VC Copilot left')
         this.status.setAttr('title', 'VC Copilot says 👋')
+        exec(`export PATH=$PATH:${docker_path} && docker rm $(docker stop $(docker ps -a -q --filter ancestor=omar/expressjs:1.0))`, (error, stdout, stderr) => {
+            if(error){console.error(`JS container stop error\n${error}`); return;}
+            console.log(`stdout (JS stop container): ${stdout}`)
+            console.log(`stderr (JS stop container): ${stderr}`)
+            new Notice('JS Container stopped successfully')
+        })
+
+        exec(`export PATH=$PATH:${docker_path} && docker rm $(docker stop $(docker ps -a -q --filter ancestor=copilot/python_server:1.0))`, (error, stdout, stderr) => {
+            if(error){console.error(`Python container stop error\n${error}`); return;}
+            console.log(`stdout (Python stop container): ${stdout}`)
+            console.log(`stderr (Python stop container): ${stderr}`)
+            new Notice('Python Container stopped successfully')
+        })
 
     }
 
@@ -448,6 +543,8 @@ export default class VCCopilotPlugin extends Plugin{
         connection_owner_field = this.settings.connection_owner_field_id
         venture_network_list = this.settings.venture_network_list_id
         pythonPath = this.settings.pythonPath
+        docker_path = this.settings._docker_path
+        bing_cookie = this.settings._U_bing_cookie
     }
     async saveSettings(){
         await this.saveData(this.settings)
@@ -457,6 +554,83 @@ export default class VCCopilotPlugin extends Plugin{
         connection_owner_field = this.settings.connection_owner_field_id
         venture_network_list = this.settings.venture_network_list_id
         pythonPath = this.settings.pythonPath
+        docker_path = this.settings._docker_path
+        bing_cookie = this.settings._U_bing_cookie
+    }
+
+    async url_research(url: string, editor: Editor){
+        this.status.setText(`🧑‍🚀 🔎: VC Copilot researching ${url}...`)
+        this.status.setAttr('title', 'Copilot is researching the url')
+
+        const res = await fetch("http://localhost:3030", {
+            method: "post",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                url: url,
+                openai_key: openaiAPIKey
+            })
+        })
+    
+        var final_text = await res.text()
+        final_text = `## ${url} Research\n` + final_text
+        final_text = final_text.replace('Problem to be solved:', '#### Problem to be solved')
+        final_text = final_text.replace("Product:", "#### Product")
+        final_text = final_text.replace('Features:', '#### Features')
+        final_text = final_text.replace('Business Model:', '#### Business Model')
+        final_text = final_text.replace('Competition:', '#### Competition')
+        final_text = final_text.replace('Vision:', '#### Vision')
+        final_text = final_text.replace('Extras:', '#### Extras')
+        
+        editor.replaceRange(final_text, editor.getCursor());
+
+        this.status.setText('🧑‍🚀: VC Copilot ready')
+        this.status.setAttr('title', 'Copilot is ready')
+
+    }
+
+    async market_map(industry: string, editor: Editor){
+        this.status.setText('🧑‍🚀 🔎: VC Copilot mapping the market...')
+        this.status.setAttr('title', 'Copilot is mapping the market...')
+
+        const res = await fetch("http://localhost:8080/map", {
+            method: "post",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                prompt: industry,
+                cookie: bing_cookie
+            })
+        })
+
+        const message = await res.text()
+
+        editor.replaceRange(message, editor.getCursor())
+
+        this.status.setText('🧑‍🚀: VC Copilot ready')
+        this.status.setAttr('title', 'Copilot is ready')
+
+
+    }
+
+    async market_research(industry: string, editor: Editor){
+
+        this.status.setText('🧑‍🚀 🔎: VC Copilot researching the market...')
+        this.status.setAttr('title', 'Copilot is researching the market...')
+
+        const res = await fetch("http://localhost:8080/research", {
+            method: "post",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                prompt: industry,
+                cookie: bing_cookie
+            })
+        })
+        const message = await res.text()
+
+        editor.replaceRange(message, editor.getCursor())
+
+        this.status.setText('🧑‍🚀: VC Copilot ready')
+        this.status.setAttr('title', 'Copilot is ready')
+
     }
 
     async defensibility_analysis (startup_description: string, editor: Editor){
@@ -544,6 +718,7 @@ class VCCopilotSettingsTab extends PluginSettingTab{
 		containerEl.empty();
 
 		containerEl.createEl('h2', {text: 'Settings for your copilot'});
+
         new Setting(containerEl)
         .setName('OpenAI API Key')
         .setDesc('Your OpenAI API Key')
@@ -600,6 +775,29 @@ class VCCopilotSettingsTab extends PluginSettingTab{
                 await this.plugin.saveSettings();
             }));
         
+        new Setting(containerEl)
+            .setName('Docker Path')
+            .setDesc('The path of your docker installation. Check it through: terminal => where docker')
+            .addText(text => text
+                .setPlaceholder('Enter path')
+                .setValue(this.plugin.settings._docker_path)
+                .onChange(async (value) => {
+                    //console.log('Open AI key: ' + value);
+                    this.plugin.settings._docker_path = value;
+                    await this.plugin.saveSettings();
+                }));
+            
+        new Setting(containerEl)
+            .setName('Bing AI _U Cookie')
+            .setDesc('The value of the _U cookie for Bing AI (find it from browser)')
+            .addText(text => text
+                .setPlaceholder('Enter cookie value')
+                .setValue(this.plugin.settings._U_bing_cookie)
+                .onChange(async (value) => {
+                    //console.log('Open AI key: ' + value);
+                    this.plugin.settings._U_bing_cookie = value;
+                    await this.plugin.saveSettings();
+                }));
 	}
 
 }
