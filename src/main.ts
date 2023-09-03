@@ -485,7 +485,7 @@ export default class VCCopilotPlugin extends Plugin{
         this.status.setText('🧑‍🚀: VC Copilot loading....')
         this.status.setAttr('title', 'VC Copilot is loading...')
 
-        exec(`export PATH=$PATH:${docker_path} && docker run -p 8080:8080 -d omar/expressjs:1.0`, (error, stdout, stderr) => {
+        exec(`export PATH=$PATH:${docker_path} && docker run -p 8080:8080 -d omarhedeya/vc_copilot_js:latest`, (error, stdout, stderr) => {
             if(error){
                 console.error(`JS container creation error: ${error}`); 
                 new Notice('Could not run JS container'); 
@@ -497,7 +497,7 @@ export default class VCCopilotPlugin extends Plugin{
 
         })
 
-        exec(`export PATH=$PATH:${docker_path} && docker run -p 3030:3030 -d copilot/python_server:1.0`, (error, stdout, stderr) => {
+        exec(`export PATH=$PATH:${docker_path} && docker run -p 3030:3030 -d omarhedeya/vc_copilot_python:latest`, (error, stdout, stderr) => {
             if(error){
                 console.error(`Python container creation error: ${error}`); 
                 new Notice('Could not run Python container'); 
@@ -519,14 +519,14 @@ export default class VCCopilotPlugin extends Plugin{
     onunload() {
         this.status.setText('🧑‍🚀: VC Copilot left')
         this.status.setAttr('title', 'VC Copilot says 👋')
-        exec(`export PATH=$PATH:${docker_path} && docker rm $(docker stop $(docker ps -a -q --filter ancestor=omar/expressjs:1.0))`, (error, stdout, stderr) => {
+        exec(`export PATH=$PATH:${docker_path} && docker rm $(docker stop $(docker ps -a -q --filter ancestor=omarhedeya/vc_copilot_js:latest))`, (error, stdout, stderr) => {
             if(error){console.error(`JS container stop error\n${error}`); return;}
             console.log(`stdout (JS stop container): ${stdout}`)
             console.log(`stderr (JS stop container): ${stderr}`)
             new Notice('JS Container stopped successfully')
         })
 
-        exec(`export PATH=$PATH:${docker_path} && docker rm $(docker stop $(docker ps -a -q --filter ancestor=copilot/python_server:1.0))`, (error, stdout, stderr) => {
+        exec(`export PATH=$PATH:${docker_path} && docker rm $(docker stop $(docker ps -a -q --filter ancestor=omarhedeya/vc_copilot_python:latest))`, (error, stdout, stderr) => {
             if(error){console.error(`Python container stop error\n${error}`); return;}
             console.log(`stdout (Python stop container): ${stdout}`)
             console.log(`stderr (Python stop container): ${stderr}`)

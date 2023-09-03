@@ -3103,7 +3103,7 @@ var VCCopilotPlugin = class extends import_obsidian3.Plugin {
     });
     this.status.setText("\u{1F9D1}\u200D\u{1F680}: VC Copilot loading....");
     this.status.setAttr("title", "VC Copilot is loading...");
-    (0, import_child_process.exec)(`export PATH=$PATH:${docker_path} && docker run -p 8080:8080 -d omar/expressjs:1.0`, (error, stdout, stderr) => {
+    (0, import_child_process.exec)(`export PATH=$PATH:${docker_path} && docker run -p 8080:8080 -d omarhedeya/vc_copilot_js:latest`, (error, stdout, stderr) => {
       if (error) {
         console.error(`JS container creation error: ${error}`);
         new import_obsidian3.Notice("Could not run JS container");
@@ -3113,7 +3113,7 @@ var VCCopilotPlugin = class extends import_obsidian3.Plugin {
       console.log(`stderr (JS creation of container): ${stderr}`);
       new import_obsidian3.Notice("JS container created");
     });
-    (0, import_child_process.exec)(`export PATH=$PATH:${docker_path} && docker run -p 3030:3030 -d copilot/python_server:1.0`, (error, stdout, stderr) => {
+    (0, import_child_process.exec)(`export PATH=$PATH:${docker_path} && docker run -p 3030:3030 -d omarhedeya/vc_copilot_python:latest`, (error, stdout, stderr) => {
       if (error) {
         console.error(`Python container creation error: ${error}`);
         new import_obsidian3.Notice("Could not run Python container");
@@ -3129,7 +3129,7 @@ var VCCopilotPlugin = class extends import_obsidian3.Plugin {
   onunload() {
     this.status.setText("\u{1F9D1}\u200D\u{1F680}: VC Copilot left");
     this.status.setAttr("title", "VC Copilot says \u{1F44B}");
-    (0, import_child_process.exec)(`export PATH=$PATH:${docker_path} && docker rm $(docker stop $(docker ps -a -q --filter ancestor=omar/expressjs:1.0))`, (error, stdout, stderr) => {
+    (0, import_child_process.exec)(`export PATH=$PATH:${docker_path} && docker rm $(docker stop $(docker ps -a -q --filter ancestor=omarhedeya/vc_copilot_js:latest))`, (error, stdout, stderr) => {
       if (error) {
         console.error(`JS container stop error
 ${error}`);
@@ -3139,7 +3139,7 @@ ${error}`);
       console.log(`stderr (JS stop container): ${stderr}`);
       new import_obsidian3.Notice("JS Container stopped successfully");
     });
-    (0, import_child_process.exec)(`export PATH=$PATH:${docker_path} && docker rm $(docker stop $(docker ps -a -q --filter ancestor=copilot/python_server:1.0))`, (error, stdout, stderr) => {
+    (0, import_child_process.exec)(`export PATH=$PATH:${docker_path} && docker rm $(docker stop $(docker ps -a -q --filter ancestor=omarhedeya/vc_copilot_python:latest))`, (error, stdout, stderr) => {
       if (error) {
         console.error(`Python container stop error
 ${error}`);
