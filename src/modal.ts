@@ -18,6 +18,7 @@ export class TextInputModal extends Modal {
       if (this.type == 'market-research'){title = 'What industry do you want to research?'}
       if (this.type == 'defensibility'){title = 'Describe the startup whose defensibility is to be evaluated'}
       if (this.type == 'evaluate'){title = 'Describe the startup to be evaluated'}
+      if (this.type == 'fireflies-summary') {title = 'Insert the name of the fireflies recording/meeting you would like to summarize'}
       contentEl.createEl('h2', { text: title });
   
       //new Setting(contentEl).setName("Input")

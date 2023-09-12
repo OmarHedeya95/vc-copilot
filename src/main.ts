@@ -19,6 +19,8 @@ let connection_owner_field = '10'
 let venture_network_list = '500'
 let docker_path = '/usr/local/bin'
 let bing_cookie = ''
+let investor_names: string[] = []
+let fireflies_api_key = ''
 
 interface ButlerSettings {
     affinityKey: string;
@@ -28,6 +30,8 @@ interface ButlerSettings {
     venture_network_list_id: string;
     _docker_path: string;
     _U_bing_cookie: string;
+    team_names: string;
+    fireflies_api: string;
     pythonPath: string
 
 }
@@ -40,7 +44,9 @@ const DEFAULT_SETTINGS: ButlerSettings = {
     venture_network_list_id: '500',
     _docker_path: '/usr/local/bin',
     _U_bing_cookie: '',
-    pythonPath: '<path-to-virtual-env>'
+    pythonPath: '<path-to-virtual-env>',
+    team_names: 'Ben Horrowitz, Vinod Khosla',
+    fireflies_api: 'default'
 
 }
 
@@ -388,7 +394,163 @@ async function push_vcs_to_affinity(status: HTMLElement){
 
 }
 
+async function get_meeting_id(meeting_name: string){
 
+    let meetings = await fetch('https://api.fireflies.ai/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${fireflies_api_key}`  //Your authorization token
+      },
+      body: JSON.stringify({
+        query: `
+            query {
+                transcripts {
+                    id
+                    title
+                    fireflies_users
+                    participants
+                    date
+                    transcript_url
+                    duration
+                }
+            }
+        `
+      }),
+    }).then(result => {return result.json()}).then(result => {return result.data});
+
+    //console.log(meetings)
+    let meetings_list = meetings['transcripts']
+    let meeting_id = ''
+
+    for (let meeting of meetings_list){
+        if (meeting['title'] == meeting_name){
+            meeting_id = meeting['id']
+            break;
+        }
+    }
+
+    return meeting_id
+
+
+}
+
+async function get_meeting_transcript_by_id(id: string){
+    let transcript = await fetch('https://api.fireflies.ai/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer 853462ce-ee32-4aef-b840-ea9883cc38b3' //Your authorization token
+        },
+        body: JSON.stringify({
+          query: `
+              query {
+                transcript(id: "${id}"){ title date sentences {text speaker_name} }
+              }
+          `
+        }),
+      }).then(result => {return result.json()}).then(result => {return result.data});
+
+      let current_sentence = ''
+      let useful_paragraphs = []
+      let current_speaker = transcript['transcript']['sentences'][0]['speaker_name']
+
+      for (let sentence of transcript['transcript']['sentences']){
+
+  
+        if (sentence['speaker_name'] == current_speaker){
+            current_sentence += sentence['text']
+        }
+        else{
+            if (current_sentence.length != 0){
+                if (investor_names.includes(current_speaker)){current_speaker += ' (Investor)'; console.log(current_speaker)}
+                else {current_speaker += ' (Founder)'}
+                current_sentence = current_speaker + ': ' + current_sentence + '\n'
+                useful_paragraphs.push(current_sentence)
+                current_sentence = sentence['text']
+                current_speaker = sentence['speaker_name']
+            }
+
+        }
+        
+      }
+      if(current_sentence.length != 0){
+        useful_paragraphs.push(current_sentence)
+      }
+
+      return useful_paragraphs
+
+
+}
+function countWords(str: string) {
+    // split the string by word boundaries
+    let words = str.match(/\b[a-z\d]+\b/gi);
+    // return the length of the array or zero if no match
+    return words ? words.length : 0;
+  }
+
+async function summarize_paragraph(paragraph: string){
+    const configuration = new Configuration({apiKey: openaiAPIKey})
+    delete configuration.baseOptions.headers['User-Agent'];
+    const openai = new OpenAIApi(configuration);
+
+    const response = await openai.createChatCompletion({
+        model: "gpt-4", //gpt-4 gpt-3.5-turbo
+        messages: [
+          {
+            "role": "system",
+            "content": "You are a helpful note-taking assistant for a venture capital investor. You will be given a part of a transcript for the call between the investor and the startup founder. Your task is to extract information covering the following aspects:\n- **Team**:<Who is the team behind the startup. Answer in bullet points!>\n- **Problem**:<What is the problem the startup is solving and for whom. Answer in bullet points!>\n- **Product**:<How does their product solve this problem. Answer in bullet points!>\n- **Traction**:<How does their customer traction look like. Answer in bullet points!>\n- **Competition**:<How does the competitive landscape look like. Answer in bullet points!>\n- **Round Info**:<How much money are they raising from investors currently? How much have they raised before? Answer in bullet points!>\n- **Other**: <Other important points about the founders OR the startup that do not fit in the above sections. Answer in bullet points!>\n\nFor every section, always give your answers in bullet points! Otherwise, say \"No Relevant Information\""
+          },
+          {
+            "role": "user",
+            "content": `${paragraph}` //You are a helpful note-taking assistant for a venture capital investor. You will be given a part of a transcript for the call between the investor and the startup founder. You should focus only on information about the startup. Ignore any information about the investor themselves or the venture capital firm they represent. Your task is to extract information from the transcript covering the following sections:\n- Team: <Who is the team behind the startup>\n- Problem: <What is the problem the startup is solving>\n- Product: <How does their product solve this problem>\n- Traction: <How does their customer traction look like>\n- Competition: <How does the competitive landscape look like>\n- Round Info: <How much money are they raising from investors currently? How much have they raised before?>\n- Other: <Other important points about the founders OR the startup that do not fit in the above sections>\n\nFor every section always give your answers in bullet points! Otherwise say \"No Relevant Information\" infront of the section's name.\n\nTranscript:\n
+          }
+        ],
+        temperature: 0,
+        max_tokens: 1024,
+        top_p: 1,
+        frequency_penalty: 0,
+        presence_penalty: 0,
+      });
+
+    return response.data.choices[0].message.content
+}
+
+async function summarize_at_one_go(paragraphs: any []){
+    let input_text = ''
+    
+    for (let i = 0; i < paragraphs.length; i++){
+        input_text += `Summary #${i+1}:\n`
+        input_text += paragraphs[i] + '\n\n'
+    }
+    const configuration = new Configuration({apiKey: openaiAPIKey})
+    delete configuration.baseOptions.headers['User-Agent'];
+    const openai = new OpenAIApi(configuration);
+
+    const response = await openai.createChatCompletion({
+        model: "gpt-4", // gpt-3.5-turbo
+        messages: [
+            {
+                "role": "system",
+                "content": "You are a helpful assistant. Your task is to expand the first summary you are given by the information in all the subsequent summaries. The final summary you provide should cover ALL following sections:\n- **Team**: <Who is the team behind the startup>\n- **Problem**: <What is the problem the startup is solving and for whom>\n- **Product**: <How does their product solve this problem>\n- **Traction**: <How does their customer traction look like>\n- **Competition**: <How does the competitive landscape look like>\n- **Round Info**: <How much money are they raising from investors currently? How much have they raised before?>\n- **Other**: <Other important points about the founders OR the startup that do not fit in the above sections>\n\nDo not leave any empty sections. For every section always give your answers in bullet points! Otherwise say \"No Relevant Information\" infront of the section's name."
+            },
+            {
+                "role": "user",
+                "content": `${input_text}`
+            }
+        ],
+        temperature: 0,
+        max_tokens: 2048,
+        top_p: 1,
+        frequency_penalty: 0,
+        presence_penalty: 0,
+    });  
+
+    return response.data.choices[0].message.content
+    
+    
+
+}
 
 
 
@@ -408,6 +570,7 @@ export default class VCCopilotPlugin extends Plugin{
         this.addCommand({id: 'affinity-startup', name: 'Push Startups to Affinity', callback: () => push_startups_to_affinity(this.status)})
         this.addCommand({id: 'summarize-all-vc-command', name: 'Summarize All VC Notes', callback: () => summarize_all_vc(this.status)})
         this.addCommand({id: 'affinity-vc', name: 'Push VCs to Affinity', callback: () => push_vcs_to_affinity(this.status)})
+
 
         this.addCommand({
             id: 'startup-defensibility',
@@ -482,8 +645,27 @@ export default class VCCopilotPlugin extends Plugin{
             },
           });
 
+          this.addCommand({
+            id: 'fireflies-summary',
+            name: 'Fireflies Call Summary',
+            editorCallback: (editor: Editor) => {
+              const inputModal = new TextInputModal(this.app, 'fireflies-summary',(input) => {
+                // Handle the submitted text here
+                console.log('Submitted text:', input);
+                this.fireflies_summary(input, editor);
+
+              });
+              inputModal.open();
+            },
+          });
+
         this.status.setText('🧑‍🚀: VC Copilot loading....')
         this.status.setAttr('title', 'VC Copilot is loading...')
+
+        this.registerEvent(this.app.workspace.on('quit', () => {
+            this.stopContainers()
+        }))
+
 
         exec(`export PATH=$PATH:${docker_path} && docker run -p 8080:8080 -d omarhedeya/vc_copilot_js:latest`, (error, stdout, stderr) => {
             if(error){
@@ -519,6 +701,26 @@ export default class VCCopilotPlugin extends Plugin{
     onunload() {
         this.status.setText('🧑‍🚀: VC Copilot left')
         this.status.setAttr('title', 'VC Copilot says 👋')
+        /*exec(`export PATH=$PATH:${docker_path} && docker rm $(docker stop $(docker ps -a -q --filter ancestor=omar/expressjs:1.0))`, (error, stdout, stderr) => {
+            if(error){console.error(`JS container stop error\n${error}`); return;}
+            console.log(`stdout (JS stop container): ${stdout}`)
+            console.log(`stderr (JS stop container): ${stderr}`)
+            new Notice('JS Container stopped successfully')
+        })
+
+        exec(`export PATH=$PATH:${docker_path} && docker rm $(docker stop $(docker ps -a -q --filter ancestor=copilot/python_server:1.0))`, (error, stdout, stderr) => {
+            if(error){console.error(`Python container stop error\n${error}`); return;}
+            console.log(`stdout (Python stop container): ${stdout}`)
+            console.log(`stderr (Python stop container): ${stderr}`)
+            new Notice('Python Container stopped successfully')
+        })*/
+
+        this.stopContainers()
+        
+
+    }
+
+    stopContainers(){
         exec(`export PATH=$PATH:${docker_path} && docker rm $(docker stop $(docker ps -a -q --filter ancestor=omarhedeya/vc_copilot_js:latest))`, (error, stdout, stderr) => {
             if(error){console.error(`JS container stop error\n${error}`); return;}
             console.log(`stdout (JS stop container): ${stdout}`)
@@ -533,7 +735,9 @@ export default class VCCopilotPlugin extends Plugin{
             new Notice('Python Container stopped successfully')
         })
 
+        
     }
+
 
     async loadSettings(){
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -545,6 +749,12 @@ export default class VCCopilotPlugin extends Plugin{
         pythonPath = this.settings.pythonPath
         docker_path = this.settings._docker_path
         bing_cookie = this.settings._U_bing_cookie
+        fireflies_api_key = this.settings.fireflies_api
+        
+        this.settings.team_names.split(',').forEach(element => {
+            investor_names.push(element.trim())
+        })
+        
     }
     async saveSettings(){
         await this.saveData(this.settings)
@@ -556,30 +766,43 @@ export default class VCCopilotPlugin extends Plugin{
         pythonPath = this.settings.pythonPath
         docker_path = this.settings._docker_path
         bing_cookie = this.settings._U_bing_cookie
+        fireflies_api_key = this.settings.fireflies_api
+        this.settings.team_names.split(',').forEach(element => {
+            investor_names.push(element.trim())
+        })
     }
 
     async url_research(url: string, editor: Editor){
         this.status.setText(`🧑‍🚀 🔎: VC Copilot researching ${url}...`)
         this.status.setAttr('title', 'Copilot is researching the url')
 
-        const res = await fetch("http://localhost:3030", {
-            method: "post",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({
-                url: url,
-                openai_key: openaiAPIKey
+        let final_text = ''
+        
+        try{
+            const res = await fetch("http://localhost:3030", {
+                method: "post",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    url: url,
+                    openai_key: openaiAPIKey
+                })
             })
-        })
-    
-        var final_text = await res.text()
-        final_text = `## ${url} Research\n` + final_text
-        final_text = final_text.replace('Problem to be solved:', '#### Problem to be solved')
-        final_text = final_text.replace("Product:", "#### Product")
-        final_text = final_text.replace('Features:', '#### Features')
-        final_text = final_text.replace('Business Model:', '#### Business Model')
-        final_text = final_text.replace('Competition:', '#### Competition')
-        final_text = final_text.replace('Vision:', '#### Vision')
-        final_text = final_text.replace('Extras:', '#### Extras')
+        
+            final_text = await res.text()
+            final_text = `## ${url} Research\n` + final_text
+            final_text = final_text.replace('Problem to be solved:', '#### Problem to be solved')
+            final_text = final_text.replace("Product:", "#### Product")
+            final_text = final_text.replace('Features:', '#### Features')
+            final_text = final_text.replace('Business Model:', '#### Business Model')
+            final_text = final_text.replace('Competition:', '#### Competition')
+            final_text = final_text.replace('Vision:', '#### Vision')
+            final_text = final_text.replace('Extras:', '#### Extras')
+        }
+        catch(error){
+            console.log(`Error when doing url research: ${error}`)
+            new Notice(`Error when doing url research`)
+
+        }
         
         editor.replaceRange(final_text, editor.getCursor());
 
@@ -588,20 +811,105 @@ export default class VCCopilotPlugin extends Plugin{
 
     }
 
+    async fireflies_summary(meeting_name: string, editor: Editor){
+        this.status.setText(`🧑‍🚀 🔎: VC Copilot reading the transcript of ${meeting_name}...`)
+        this.status.setAttr('title', 'Copilot is reading the transcript')
+
+        let final_summary = ''
+
+        let cursor_position = editor.getCursor()
+
+        try{
+            let id = await get_meeting_id(meeting_name);
+            let paragraphs = await get_meeting_transcript_by_id(id);
+            let summaries = []
+
+            let long_paragraph = ''
+            let extended_paragraphs = []
+        
+        
+            for (let paragraph of paragraphs){
+                let number_of_words = countWords(paragraph)
+        
+        
+                if (number_of_words >= 12){
+                    //Include only sentences that are long enough to be relevant
+                    if (number_of_words + countWords(long_paragraph) <= 2500){ 
+                        //keep a paragraph below 1500 words (2000 tokens) for the context window
+                        long_paragraph += paragraph
+                    }
+                    else{
+                        extended_paragraphs.push(long_paragraph)
+                        long_paragraph = paragraph
+        
+                    }
+                }
+        
+            }
+            if (long_paragraph.length != 0){
+                extended_paragraphs.push(long_paragraph)
+            }
+            this.status.setText(`🧑‍🚀 🔎: VC Copilot summarizing sections of the transcript of ${meeting_name}...`)
+            this.status.setAttr('title', 'Copilot is summarizing sections of the transcript')
+            for (let paragraph of extended_paragraphs){    
+   
+                let summary = await summarize_paragraph(paragraph)
+                summaries.push(summary)
+                //console.log(summary)
+            }
+            this.status.setText(`🧑‍🚀 🔎: VC Copilot summarizing the full transcript of ${meeting_name}...`)
+            this.status.setAttr('title', 'Copilot is summarizing the full transcript')
+
+            final_summary = await summarize_at_one_go(summaries)
+            final_summary = final_summary.replace('- **Team**:', '#### Team')
+            final_summary = final_summary.replace('- **Problem**:', '#### Problem')
+            final_summary = final_summary.replace('- **Product**:', '#### Product')
+            final_summary = final_summary.replace('- **Traction**:', '#### Traction')
+            final_summary = final_summary.replace('- **Competition**:', '#### Competition')
+            final_summary = final_summary.replace('- **Round Info**:', '#### Round Info')
+            final_summary = final_summary.replace('- **Other**:', '#### Other')
+            final_summary = `## ${meeting_name} call summary` + '\n' + final_summary
+            //todo change the bold item with just subheaders similar to url research
+
+
+        }
+        catch(error){
+            console.log(`Error during fireflies summary: ${error}`)
+            new Notice(`Error during fireflies summary`)
+
+        }
+
+        editor.replaceRange(final_summary, cursor_position)
+        this.status.setText('🧑‍🚀: VC Copilot ready')
+        this.status.setAttr('title', 'Copilot is ready')
+
+
+
+    }
+
     async market_map(industry: string, editor: Editor){
         this.status.setText('🧑‍🚀 🔎: VC Copilot mapping the market...')
         this.status.setAttr('title', 'Copilot is mapping the market...')
 
-        const res = await fetch("http://localhost:8080/map", {
-            method: "post",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({
-                prompt: industry,
-                cookie: bing_cookie
+        let res;
+        let message = '';
+        try{
+            res = await fetch("http://localhost:8080/map", {
+                method: "post",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    prompt: industry,
+                    cookie: bing_cookie
+                })
             })
-        })
+            message = await res.text()
+        }
+        catch(error){
+            console.log(`Error when market mapping: ${error}`)
+            new Notice(`Error when market mapping`)
+        }
 
-        const message = await res.text()
+        
 
         editor.replaceRange(message, editor.getCursor())
 
@@ -616,7 +924,10 @@ export default class VCCopilotPlugin extends Plugin{
         this.status.setText('🧑‍🚀 🔎: VC Copilot researching the market...')
         this.status.setAttr('title', 'Copilot is researching the market...')
 
-        const res = await fetch("http://localhost:8080/research", {
+        let res;
+        let message = '';
+        try{
+        res = await fetch("http://localhost:8080/research", {
             method: "post",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
@@ -624,7 +935,14 @@ export default class VCCopilotPlugin extends Plugin{
                 cookie: bing_cookie
             })
         })
-        const message = await res.text()
+        message = await res.text()
+
+    }
+    catch (error){
+        console.log(`Error when doing market research: ${error}`)
+        new Notice(`Error when doing market research`)
+    }
+        
 
         editor.replaceRange(message, editor.getCursor())
 
@@ -726,7 +1044,6 @@ class VCCopilotSettingsTab extends PluginSettingTab{
             .setPlaceholder('Enter key')
             .setValue(this.plugin.settings.openAIKey)
             .onChange(async (value) => {
-                console.log('Open AI key: ' + value);
                 this.plugin.settings.openAIKey = value;
                 await this.plugin.saveSettings();
             }));
@@ -737,7 +1054,6 @@ class VCCopilotSettingsTab extends PluginSettingTab{
             .setPlaceholder('Enter key')
             .setValue(this.plugin.settings.affinityKey)
             .onChange(async (value) => {
-                console.log('key: ' + value);
                 this.plugin.settings.affinityKey = value;
                 await this.plugin.saveSettings();
             }));
@@ -748,7 +1064,6 @@ class VCCopilotSettingsTab extends PluginSettingTab{
             .setPlaceholder('Enter value')
             .setValue(this.plugin.settings.owner_person_value)
             .onChange(async (value) => {
-                console.log('Owner value: ' + value);
                 this.plugin.settings.owner_person_value = value;
                 await this.plugin.saveSettings();
             }));
@@ -759,7 +1074,6 @@ class VCCopilotSettingsTab extends PluginSettingTab{
             .setPlaceholder('Enter value')
             .setValue(this.plugin.settings.connection_owner_field_id)
             .onChange(async (value) => {
-                console.log('Connection Owner Field ID value: ' + value);
                 this.plugin.settings.connection_owner_field_id = value;
                 await this.plugin.saveSettings();
             }));
@@ -770,7 +1084,6 @@ class VCCopilotSettingsTab extends PluginSettingTab{
             .setPlaceholder('Enter value')
             .setValue(this.plugin.settings.venture_network_list_id)
             .onChange(async (value) => {
-                console.log('Venture network list id: ' + value);
                 this.plugin.settings.venture_network_list_id = value;
                 await this.plugin.saveSettings();
             }));
@@ -798,6 +1111,29 @@ class VCCopilotSettingsTab extends PluginSettingTab{
                     this.plugin.settings._U_bing_cookie = value;
                     await this.plugin.saveSettings();
                 }));
+        new Setting(containerEl)
+            .setName('Investor Names')
+            .setDesc('Enter the names of your team members (investors) separated by a comma. This helps the Fireflies summarizer to focus more on the founder')
+            .addText(text => text
+                //.setPlaceholder('Ben Horrowitz,...')
+                .setValue(this.plugin.settings.team_names)
+                .onChange(async (value) => {
+                    //console.log('Open AI key: ' + value);
+                    this.plugin.settings.team_names = value;
+                    await this.plugin.saveSettings();
+                }));
+        
+        new Setting(containerEl)
+            .setName('Fireflies API Key')
+            .setDesc('Enter the Fireflies API Key')
+            .addText(text => text
+                //.setPlaceholder('')
+                .setValue(this.plugin.settings.fireflies_api)
+                .onChange(async (value) => {
+                    //console.log('Open AI key: ' + value);
+                    this.plugin.settings.fireflies_api = value;
+                    await this.plugin.saveSettings();
+                }));         
 	}
 
 }
