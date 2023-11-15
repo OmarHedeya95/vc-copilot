@@ -2,10 +2,10 @@ import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Set
 //import { WizardView, WIZARD_VIEW } from 'view';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
-const { Configuration, OpenAIApi } = require("openai");
+import { Configuration, OpenAIApi } from "openai";
 import {get_startup_by_name, add_notes_to_company, get_person_by_name, get_person_details, is_person_in_venture_network, get_field_values, add_entry_to_list, add_field_value, add_notes_to_person} from "./utils";
 import { start } from 'repl';
-import { TextInputModal } from 'modal';
+import { TextInputModal } from './modal';
 import { exec} from "child_process";
 
 
@@ -54,6 +54,7 @@ const DEFAULT_SETTINGS: ButlerSettings = {
 async function openai_js(query: String, system_prompt: String, max_tokens: number = 256, temperature: number = 0.3){
     const configuration = new Configuration({
         apiKey: openaiAPIKey,
+        basePath: process.env.OPENAI_BASE_URL
       });
       //to avoid an annoying error/warning message
       delete configuration.baseOptions.headers['User-Agent'];
