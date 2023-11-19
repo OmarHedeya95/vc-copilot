@@ -56,7 +56,7 @@ async function openai_js(query: String, system_prompt: String, max_tokens: numbe
       const system_message = system_prompt
       
     const response = await openai.createChatCompletion({
-        model: "gpt-4",
+        model: "gpt-4-1106-preview",
         temperature: temperature,
         max_tokens: max_tokens,
         messages: [
@@ -86,7 +86,7 @@ async function openai_js_multiturn(queries: string[], system_prompt: String, max
         messages.push({role: "user", content: query})
         console.log(messages)
         const response = await openai.createChatCompletion({
-            model: "gpt-4",
+            model: "gpt-4-1106-preview",
             temperature: temperature,
             max_tokens: max_tokens,
             messages: messages
@@ -489,7 +489,7 @@ async function summarize_paragraph(paragraph: string){
     const openai = new OpenAIApi(configuration);
 
     const response = await openai.createChatCompletion({
-        model: "gpt-4", //gpt-4 gpt-3.5-turbo
+        model: "gpt-4-1106-preview", //gpt-4 gpt-3.5-turbo
         messages: [
           {
             "role": "system",
@@ -522,7 +522,7 @@ async function summarize_at_one_go(paragraphs: any []){
     const openai = new OpenAIApi(configuration);
 
     const response = await openai.createChatCompletion({
-        model: "gpt-4", // gpt-3.5-turbo
+        model: "gpt-4-1106-preview", // gpt-3.5-turbo
         messages: [
             {
                 "role": "system",
@@ -792,14 +792,21 @@ export default class VCCopilotPlugin extends Plugin{
             this.status.setAttr('title', 'Copilot is summarizing the full transcript')
 
             final_summary = await summarize_at_one_go(summaries)
-            final_summary = final_summary.replace('- **Team**:', '#### Team')
-            final_summary = final_summary.replace('- **Problem**:', '#### Problem')
-            final_summary = final_summary.replace('- **Product**:', '#### Product')
-            final_summary = final_summary.replace('- **Traction**:', '#### Traction')
-            final_summary = final_summary.replace('- **Competition**:', '#### Competition')
-            final_summary = final_summary.replace('- **Round Info**:', '#### Round Info')
-            final_summary = final_summary.replace('- **Other**:', '#### Other')
-            final_summary = `## ${meeting_name} call summary` + '\n' + final_summary
+            final_summary = final_summary.replace('**Team**:', '#### Team')
+            final_summary = final_summary.replace('**Problem**:', '#### Problem')
+            final_summary = final_summary.replace('**Product**:', '#### Product')
+            final_summary = final_summary.replace('**Traction**:', '#### Traction')
+            final_summary = final_summary.replace('**Competition**:', '#### Competition')
+            final_summary = final_summary.replace('**Round Info**:', '#### Round Info')
+            final_summary = final_summary.replace('**Other**:', '#### Other')
+            final_summary = final_summary.replace('- #### Team', '#### Team')
+            final_summary = final_summary.replace('- #### Problem', '#### Problem')
+            final_summary = final_summary.replace('- #### Product', '#### Product')
+            final_summary = final_summary.replace('- #### Traction', '#### Traction')
+            final_summary = final_summary.replace('- #### Competition', '#### Competition')
+            final_summary = final_summary.replace('- #### Round Info', '#### Round Info')
+            final_summary = final_summary.replace('- #### Other', '#### Other')
+            final_summary = `## ${meeting_name} call summary` + '\n#review_startup\n' + final_summary
             //todo change the bold item with just subheaders similar to url research
 
 
