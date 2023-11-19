@@ -11,14 +11,12 @@ import { exec} from "child_process";
 
 
 
-let pythonPath = ''
+let you_api_key = ''
 let affinityAPIKey = ''
 let openaiAPIKey = ''
 let owner_value = '10'
 let connection_owner_field = '10'
 let venture_network_list = '500'
-let docker_path = '/usr/local/bin'
-let bing_cookie = ''
 let investor_names: string[] = []
 let fireflies_api_key = ''
 
@@ -28,11 +26,9 @@ interface ButlerSettings {
     owner_person_value: string;
     connection_owner_field_id: string;
     venture_network_list_id: string;
-    _docker_path: string;
-    _U_bing_cookie: string;
     team_names: string;
     fireflies_api: string;
-    pythonPath: string
+    you_api: string
 
 }
 
@@ -42,9 +38,7 @@ const DEFAULT_SETTINGS: ButlerSettings = {
     owner_person_value: '10',
     connection_owner_field_id: '100',
     venture_network_list_id: '500',
-    _docker_path: '/usr/local/bin',
-    _U_bing_cookie: '',
-    pythonPath: '<path-to-virtual-env>',
+    you_api: '<You.com-API-Key>',
     team_names: 'Ben Horrowitz, Vinod Khosla',
     fireflies_api: 'default'
 
@@ -603,7 +597,7 @@ export default class VCCopilotPlugin extends Plugin{
           });
 
 
-        this.addCommand({
+        /*this.addCommand({
             id: 'market-map-command',
             name: 'Market Map',
             editorCallback: (editor: Editor) => {
@@ -615,7 +609,7 @@ export default class VCCopilotPlugin extends Plugin{
               });
               inputModal.open();
             },
-          });
+          });*/
 
           this.addCommand({
             id: 'market-research-command',
@@ -687,9 +681,7 @@ export default class VCCopilotPlugin extends Plugin{
         owner_value = this.settings.owner_person_value
         connection_owner_field = this.settings.connection_owner_field_id
         venture_network_list = this.settings.venture_network_list_id
-        pythonPath = this.settings.pythonPath
-        docker_path = this.settings._docker_path
-        bing_cookie = this.settings._U_bing_cookie
+        you_api_key = this.settings.you_api
         fireflies_api_key = this.settings.fireflies_api
         
         this.settings.team_names.split(',').forEach(element => {
@@ -704,9 +696,7 @@ export default class VCCopilotPlugin extends Plugin{
         owner_value = this.settings.owner_person_value
         connection_owner_field = this.settings.connection_owner_field_id
         venture_network_list = this.settings.venture_network_list_id
-        pythonPath = this.settings.pythonPath
-        docker_path = this.settings._docker_path
-        bing_cookie = this.settings._U_bing_cookie
+        you_api_key = this.settings.you_api
         fireflies_api_key = this.settings.fireflies_api
         this.settings.team_names.split(',').forEach(element => {
             investor_names.push(element.trim())
@@ -828,7 +818,7 @@ export default class VCCopilotPlugin extends Plugin{
 
     }
 
-    async market_map(industry: string, editor: Editor){
+    /*async market_map(industry: string, editor: Editor){
         this.status.setText('🧑‍🚀 🔎: VC Copilot mapping the market...')
         this.status.setAttr('title', 'Copilot is mapping the market...')
 
@@ -858,13 +848,13 @@ export default class VCCopilotPlugin extends Plugin{
         this.status.setAttr('title', 'Copilot is ready')
 
 
-    }
+    }*/
 
     async you_research(query: string){
         let results = await request({
             url: `https://api.ydc-index.io/search?query=${query}`, 
             method: 'GET',
-            headers: {'X-API-Key': '3bb35f4b-02de-4365-8607-8b6f80c04f27<__>1OCpXKETU8N2v5f4W7kXsPrt'}
+            headers: {'X-API-Key': you_api_key} 
         
         })
         //.then(response => response.json())
@@ -907,6 +897,8 @@ export default class VCCopilotPlugin extends Plugin{
             
             for (let website of websites)
             {
+                this.status.setText(`🧑‍🚀 🔎: VC Copilot ${website} research...`)
+                this.status.setAttr('title', `Copilot is researching ${website}...`)
 
                 let summaries = []
                 let sources = []
@@ -976,8 +968,7 @@ export default class VCCopilotPlugin extends Plugin{
 
                 }
 
-                this.status.setText(`🧑‍🚀 🔎: VC Copilot ${website} research...`)
-                this.status.setAttr('title', `Copilot is researching ${website}...`)
+
 
                 
             }
@@ -1149,29 +1140,8 @@ class VCCopilotSettingsTab extends PluginSettingTab{
                 await this.plugin.saveSettings();
             }));
         
-        new Setting(containerEl)
-            .setName('Docker Path')
-            .setDesc('The path of your docker installation. Check it through: terminal => where docker')
-            .addText(text => text
-                .setPlaceholder('Enter path')
-                .setValue(this.plugin.settings._docker_path)
-                .onChange(async (value) => {
-                    //console.log('Open AI key: ' + value);
-                    this.plugin.settings._docker_path = value;
-                    await this.plugin.saveSettings();
-                }));
-            
-        new Setting(containerEl)
-            .setName('Bing AI _U Cookie')
-            .setDesc('The value of the _U cookie for Bing AI (find it from browser)')
-            .addText(text => text
-                .setPlaceholder('Enter cookie value')
-                .setValue(this.plugin.settings._U_bing_cookie)
-                .onChange(async (value) => {
-                    //console.log('Open AI key: ' + value);
-                    this.plugin.settings._U_bing_cookie = value;
-                    await this.plugin.saveSettings();
-                }));
+
+
         new Setting(containerEl)
             .setName('Investor Names')
             .setDesc('Enter the names of your team members (investors) separated by a comma. This helps the Fireflies summarizer to focus more on the founder')
@@ -1188,13 +1158,21 @@ class VCCopilotSettingsTab extends PluginSettingTab{
             .setName('Fireflies API Key')
             .setDesc('Enter the Fireflies API Key')
             .addText(text => text
-                //.setPlaceholder('')
                 .setValue(this.plugin.settings.fireflies_api)
                 .onChange(async (value) => {
-                    //console.log('Open AI key: ' + value);
                     this.plugin.settings.fireflies_api = value;
                     await this.plugin.saveSettings();
                 }));         
+
+        new Setting(containerEl)
+            .setName('You.com API Key')
+            .setDesc('Enter the You.com API Key')
+            .addText(text => text
+                .setValue(this.plugin.settings.you_api)
+                .onChange(async (value) => {
+                    this.plugin.settings.you_api = value;
+                    await this.plugin.saveSettings();
+                })); 
 	}
 
 }
