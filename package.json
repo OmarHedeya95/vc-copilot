@@ -1,6 +1,6 @@
 {
 	"name": "vc-copilot-plugin",
-	"version": "2.0.0",
+	"version": "2.0.1",
 	"description": "Supports venture capitalists with their daily work; summarization, syncing with CRM (Customer Relationship Management) tool, providing guidelines for due diligence, and testing defensibility of a startup",
 	"main": "main.js",
 	"scripts": {
