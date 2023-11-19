@@ -919,35 +919,155 @@ export default class VCCopilotPlugin extends Plugin{
 
     }
 
+    async you_research(query: string){
+        let results = await request({
+            url: `https://api.ydc-index.io/search?query=${query}`, 
+            method: 'GET',
+            headers: {'X-API-Key': '3bb35f4b-02de-4365-8607-8b6f80c04f27<__>1OCpXKETU8N2v5f4W7kXsPrt'}
+        
+        })
+        //.then(response => response.json())
+        .then(response => {
+            return response
+            
+        })
+        .catch(err => console.error(err));
+
+        //var json = JSON.stringify(results, null, 2)
+        return JSON.parse(results)['hits']
+
+    }
+
     async market_research(industry: string, editor: Editor){
 
         this.status.setText('🧑‍🚀 🔎: VC Copilot researching the market...')
         this.status.setAttr('title', 'Copilot is researching the market...')
 
         let res;
-        let message = '';
-        try{
-        res = await fetch("http://localhost:8080/research", {
-            method: "post",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({
-                prompt: industry,
-                cookie: bing_cookie
-            })
-        })
-        message = await res.text()
 
-    }
-    catch (error){
-        console.log(`Error when doing market research: ${error}`)
-        new Notice(`Error when doing market research`)
-    }
+        try{
+
+            const options = {method: 'GET', headers: {'X-API-Key': '3bb35f4b-02de-4365-8607-8b6f80c04f27<__>1OCpXKETU8N2v5f4W7kXsPrt'}};
+            const configuration = new Configuration({
+                apiKey: openaiAPIKey,
+            });
+            //to avoid an annoying error/warning message
+            delete configuration.baseOptions.headers['User-Agent'];
+            const openai = new OpenAIApi(configuration);
+
+
+
+
+            let message = '## Market Research\n';
+
         
 
-        editor.replaceRange(message, editor.getCursor())
+            let websites = ["", "globenewswire.com", "statista.com"]
+            
+            for (let website of websites)
+            {
 
-        this.status.setText('🧑‍🚀: VC Copilot ready')
-        this.status.setAttr('title', 'Copilot is ready')
+                let summaries = []
+                let sources = []
+                let query = `site:${website} ${industry} industry market report.`
+
+
+                let result = await this.you_research(query)
+
+
+                let counter = 0;
+                
+                let user_prompt = `What facts about the ${industry} market can an investor learn from the following paragraphs? If there are no facts to learn simply output \"Nothing\"`
+        
+                for (let element of result){
+                    
+                    let snippets = element['snippets']
+                    let title = element['title']
+                    let url = element['url']
+
+                    let summary = ''
+
+                    for (let i = 0; i < snippets.length; i+=5){
+                        let paragraphs = snippets.slice(i, i+5)
+                        paragraphs[0] = '- ' + paragraphs[0]
+                        let string_paragraphs = paragraphs.join('\n\n- ')
+
+                        const response = await openai.createChatCompletion({
+                            model: "gpt-4-1106-preview", //gpt-4 gpt-3.5-turbo  gpt-4-1106-preview
+                            messages: [
+                            {
+                                "role": "system",
+                                "content": "Act as an investigative journalist who is obsessed with the truth and accuracy. You always give answers in bullet points."
+                            },
+                            {
+                                "role": "user",
+                                "content": `${user_prompt}` + '\nParagraphs:\n' + string_paragraphs 
+                            }
+                            ],
+                            temperature: 0,
+                            max_tokens: 1024,
+                            top_p: 1,
+                            frequency_penalty: 0,
+                            presence_penalty: 0,
+                        });
+
+                        summary += response.data.choices[0].message.content + '\n'
+
+                    }
+                    
+                    summaries.push(summary)
+                    let source = `[${title}](${url})`
+                    sources.push(source)
+                    counter++;
+
+                    if (counter == 2){
+                        break;
+                    }
+                
+                }
+            
+
+                
+                for(let i = 0; i < summaries.length; i++){
+
+                    message += `#### ${sources[i]}\n`
+                    message += summaries[i] + '\n\n' 
+
+                }
+
+                this.status.setText(`🧑‍🚀 🔎: VC Copilot ${website} research...`)
+                this.status.setAttr('title', `Copilot is researching ${website}...`)
+
+                
+            }
+
+            message += '#### Further Material\n'
+            message += 'Here are some reading material for further information\n\n'
+
+            let query = `${industry} industry primer pdf`
+
+
+            let pdfs = await this.you_research(query)
+
+            for (let element of pdfs){
+                    
+                let snippets = element['snippets']
+                let title = element['title']
+                let url = element['url']
+                message += '- ' + `[${title}](${url})` + '\n'
+            }
+
+
+
+
+            editor.replaceRange(message, editor.getCursor())
+            this.status.setText('🧑‍🚀: VC Copilot ready')
+            this.status.setAttr('title', 'Copilot is ready')
+        }
+        catch (error){
+            console.log(`Error when doing market research: ${error}`)
+            new Notice(`Error when doing market research`)
+        }
 
     }
 
