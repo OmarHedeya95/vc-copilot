@@ -779,7 +779,7 @@ export default class VCCopilotPlugin extends Plugin{
         let final_text = ''
         
         try{
-            const res = await fetch("http://localhost:3030", {
+            const res = await fetch("https://url-researcher-container-xm5lmdnsxq-ey.a.run.app", {
                 method: "post",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
