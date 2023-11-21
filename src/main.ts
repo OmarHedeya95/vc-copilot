@@ -1,12 +1,7 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, Menu, MenuItem, MarkdownFileInfo, TFile, TAbstractFile, request} from 'obsidian';
-//import { WizardView, WIZARD_VIEW } from 'view';
-import * as fs from 'fs';
-import { execSync } from 'child_process';
 const { Configuration, OpenAIApi } = require("openai");
 import {get_startup_by_name, add_notes_to_company, get_person_by_name, get_person_details, is_person_in_venture_network, get_field_values, add_entry_to_list, add_field_value, add_notes_to_person} from "./utils";
-import { start } from 'repl';
-import { TextInputModal } from 'modal';
-import { exec} from "child_process";
+import { MultipleTextInputModal, TextInputModal } from 'modal';
 
 
 
@@ -428,7 +423,6 @@ async function get_meeting_id(meeting_name: string){
 
 
 }
-
 async function get_meeting_transcript_by_id(id: string){
     let transcript = await fetch('https://api.fireflies.ai/graphql', {
         method: 'POST',
@@ -476,6 +470,8 @@ async function get_meeting_transcript_by_id(id: string){
 
 
 }
+
+
 function countWords(str: string) {
     // split the string by word boundaries
     let words = str.match(/\b[a-z\d]+\b/gi);
@@ -510,7 +506,7 @@ async function summarize_paragraph(paragraph: string){
     return response.data.choices[0].message.content
 }
 
-async function summarize_at_one_go(paragraphs: any []){
+async function summarize_all_paragraphs_together(paragraphs: any []){
     let input_text = ''
     
     for (let i = 0; i < paragraphs.length; i++){
@@ -597,20 +593,6 @@ export default class VCCopilotPlugin extends Plugin{
           });
 
 
-        /*this.addCommand({
-            id: 'market-map-command',
-            name: 'Market Map',
-            editorCallback: (editor: Editor) => {
-              const inputModal = new TextInputModal(this.app, 'market-research',(input) => {
-                // Handle the submitted text here
-                console.log('Submitted text:', input);
-                this.market_map(input, editor);
-
-              });
-              inputModal.open();
-            },
-          });*/
-
           this.addCommand({
             id: 'market-research-command',
             name: 'Market Research',
@@ -633,6 +615,39 @@ export default class VCCopilotPlugin extends Plugin{
                 // Handle the submitted text here
                 console.log('Submitted text:', input);
                 this.url_research(input, editor);
+
+              });
+              inputModal.open();
+            },
+          });
+
+          this.addCommand({
+            id: 'competition-research-command',
+            name: 'Competition Research',
+            editorCallback: (editor: Editor) => {
+              const inputModal = new TextInputModal(this.app, 'Describe the startup or the industry for competition research',(input) => {
+                // Handle the submitted text here
+                console.log('Submitted text:', input);
+                this.competition_research(input, editor);
+
+              });
+              inputModal.open();
+            },
+          });
+
+          //todo make this more generalizable, you need one input for search query, another for website to be used, another for the task you want.
+          this.addCommand({
+            id: 'custom-research',
+            name: 'Custom Research',
+            editorCallback: (editor: Editor) => {
+              const inputModal = new MultipleTextInputModal(this.app, '',(input) => {
+                // Handle the submitted text here
+                let result = input.split(', ')
+                let website = result[0]
+                let query = result[1]
+                let task = result[2]
+                console.log('Submitted text:', input);
+                this.specific_web_research(task, website, query, editor);
 
               });
               inputModal.open();
@@ -791,14 +806,14 @@ export default class VCCopilotPlugin extends Plugin{
             this.status.setText(`🧑‍🚀 🔎: VC Copilot summarizing the full transcript of ${meeting_name}...`)
             this.status.setAttr('title', 'Copilot is summarizing the full transcript')
 
-            final_summary = await summarize_at_one_go(summaries)
-            final_summary = final_summary.replace('**Team**:', '#### Team')
-            final_summary = final_summary.replace('**Problem**:', '#### Problem')
-            final_summary = final_summary.replace('**Product**:', '#### Product')
-            final_summary = final_summary.replace('**Traction**:', '#### Traction')
-            final_summary = final_summary.replace('**Competition**:', '#### Competition')
-            final_summary = final_summary.replace('**Round Info**:', '#### Round Info')
-            final_summary = final_summary.replace('**Other**:', '#### Other')
+            final_summary = await summarize_all_paragraphs_together(summaries)
+            final_summary = final_summary.replace(/\*\*Team(:)?\*\*/g, '#### Team')
+            final_summary = final_summary.replace(/\*\*Problem(:)?\*\*/g, '#### Problem')
+            final_summary = final_summary.replace(/\*\*Product(:)?\*\*/g, '#### Product')
+            final_summary = final_summary.replace(/\*\*Traction(:)?\*\*/g, '#### Traction')
+            final_summary = final_summary.replace(/\*\*Competition(:)?\*\*/g, '#### Competition')
+            final_summary = final_summary.replace(/\*\*Round Info(:)?\*\*/g, '#### Round Info')
+            final_summary = final_summary.replace(/\*\*Other(:)?\*\*/g, '#### Other')
             final_summary = final_summary.replace('- #### Team', '#### Team')
             final_summary = final_summary.replace('- #### Problem', '#### Problem')
             final_summary = final_summary.replace('- #### Product', '#### Product')
@@ -825,37 +840,7 @@ export default class VCCopilotPlugin extends Plugin{
 
     }
 
-    /*async market_map(industry: string, editor: Editor){
-        this.status.setText('🧑‍🚀 🔎: VC Copilot mapping the market...')
-        this.status.setAttr('title', 'Copilot is mapping the market...')
-
-        let res;
-        let message = '';
-        try{
-            res = await fetch("http://localhost:8080/map", {
-                method: "post",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                    prompt: industry,
-                    cookie: bing_cookie
-                })
-            })
-            message = await res.text()
-        }
-        catch(error){
-            console.log(`Error when market mapping: ${error}`)
-            new Notice(`Error when market mapping`)
-        }
-
-        
-
-        editor.replaceRange(message, editor.getCursor())
-
-        this.status.setText('🧑‍🚀: VC Copilot ready')
-        this.status.setAttr('title', 'Copilot is ready')
-
-
-    }*/
+    
 
     async you_research(query: string){
         let results = await request({
@@ -885,7 +870,6 @@ export default class VCCopilotPlugin extends Plugin{
 
         try{
 
-            const options = {method: 'GET', headers: {'X-API-Key': '3bb35f4b-02de-4365-8607-8b6f80c04f27<__>1OCpXKETU8N2v5f4W7kXsPrt'}};
             const configuration = new Configuration({
                 apiKey: openaiAPIKey,
             });
@@ -1007,6 +991,263 @@ export default class VCCopilotPlugin extends Plugin{
             console.log(`Error when doing market research: ${error}`)
             new Notice(`Error when doing market research`)
         }
+
+    }
+
+    async websearch_and_summary(task: string, website: string, search_query: string, presentation_prompt: string, editor: Editor){
+
+        this.status.setText('🧑‍🚀 🔎: VC Copilot surfing the internet...')
+        this.status.setAttr('title', 'Copilot is surfing...')
+
+        try{
+
+            const configuration = new Configuration({
+                apiKey: openaiAPIKey,
+            });
+            //to avoid an annoying error/warning message
+            delete configuration.baseOptions.headers['User-Agent'];
+            const openai = new OpenAIApi(configuration);
+
+
+
+
+            let message = `## ${task}\n`;
+
+        
+
+
+                this.status.setText(`🧑‍🚀 🔎: VC Copilot ${website} research...`)
+                this.status.setAttr('title', `Copilot is researching ${website}...`)
+
+                let summaries = []
+                let sources = []
+                
+                let query = `site:${website} ${search_query}`
+
+
+                let result = await this.you_research(query)
+
+
+                let counter = 0;
+                
+                let user_prompt = presentation_prompt
+
+                for (let element of result){
+                    
+                    let snippets = element['snippets']
+                    let title = element['title']
+                    let url = element['url']
+
+                    let summary = ''
+
+                    //for (let i = 0; i < snippets.length; i+=5){
+                        let paragraphs = snippets    //.slice(i, i+5) //todo 128k context, maybe do it all in one go. potentially change this?
+                        paragraphs[0] = '- ' + paragraphs[0]
+                        let string_paragraphs = paragraphs.join('\n\n- ')
+                    if (string_paragraphs && string_paragraphs.length > 1){
+                        const response = await openai.createChatCompletion({
+                            model: "gpt-4-1106-preview", //gpt-4 gpt-3.5-turbo  gpt-4-1106-preview
+                            messages: [
+                            {
+                                "role": "system",
+                                "content": "Act as an investigative journalist who is obsessed with the truth and accuracy. You always give answers in bullet points."
+                            },
+                            {
+                                "role": "user",
+                                "content": `${user_prompt}` + '\nParagraphs:\n' + string_paragraphs 
+                            }
+                            ],
+                            temperature: 0,
+                            max_tokens: 1024,
+                            top_p: 1,
+                            frequency_penalty: 0,
+                            presence_penalty: 0,
+                        });
+
+                        summary += response.data.choices[0].message.content + '\n'
+                    }
+
+                    //}
+                    
+                    summaries.push(summary)
+                    let source = `[${title}](${url})`
+                    sources.push(source)
+                    counter++;
+
+                    //todo make this variable regarding how many sources we take
+                    if (counter == 5){
+                        break;
+                    }
+                
+                }
+            
+
+                
+                for(let i = 0; i < summaries.length; i++){
+
+                    message += `#### ${sources[i]}\n`
+                    message += summaries[i] + '\n\n' 
+
+                }
+
+
+
+                
+
+            editor.replaceRange(message, editor.getCursor())
+            this.status.setText('🧑‍🚀: VC Copilot ready')
+            this.status.setAttr('title', 'Copilot is ready')
+
+
+        }
+        catch (error){
+            console.log(`Error while doing research: ${error}`)
+            new Notice(`Error while doing research`)
+        }
+
+
+    }
+
+    async competition_research(description: string, editor: Editor){
+
+        this.status.setText('🧑‍🚀 🔎: VC Copilot researching the competition...')
+        this.status.setAttr('title', 'Copilot is researching the competition...')
+
+        try{
+
+            const configuration = new Configuration({
+                apiKey: openaiAPIKey,
+            });
+            //to avoid an annoying error/warning message
+            delete configuration.baseOptions.headers['User-Agent'];
+            const openai = new OpenAIApi(configuration);
+
+
+
+
+            let message = '## Competition Research\n';
+
+        
+
+            let websites = ["techcrunch.com", "businessinsider.com"]//, "news.ycombinator.com", "sifted.eu", "reddit.com"]
+            
+            for (let website of websites)
+            {
+                this.status.setText(`🧑‍🚀 🔎: VC Copilot ${website} research...`)
+                this.status.setAttr('title', `Copilot is researching ${website}...`)
+
+                let summaries = []
+                let sources = []
+                let query = `site:${website} ${description}`
+
+
+                let result = await this.you_research(query)
+
+
+                let counter = 0;
+                
+                let user_prompt = `Highlight the most important facts for an investor from the following paragraphs. Always respond in the following format: 
+                - problems to be solved
+                - product and technology
+                - money raised
+                - team
+                - other important points`
+
+                for (let element of result){
+                    
+                    let snippets = element['snippets']
+                    let title = element['title']
+                    let url = element['url']
+
+                    let summary = ''
+
+                    //for (let i = 0; i < snippets.length; i+=5){
+                        let paragraphs = snippets//.slice(i, i+5) //todo 128k context, maybe do it all in one go. potentially change this?
+                        paragraphs[0] = '- ' + paragraphs[0]
+                        let string_paragraphs = paragraphs.join('\n\n- ')
+
+                        const response = await openai.createChatCompletion({
+                            model: "gpt-4-1106-preview", //gpt-4 gpt-3.5-turbo  gpt-4-1106-preview
+                            messages: [
+                            {
+                                "role": "system",
+                                "content": "Act as an investigative journalist who is obsessed with the truth and accuracy. You always give answers in bullet points."
+                            },
+                            {
+                                "role": "user",
+                                "content": `${user_prompt}` + '\nParagraphs:\n' + string_paragraphs 
+                            }
+                            ],
+                            temperature: 0,
+                            max_tokens: 1024,
+                            top_p: 1,
+                            frequency_penalty: 0,
+                            presence_penalty: 0,
+                        });
+
+                        summary += response.data.choices[0].message.content + '\n'
+
+                    //}
+                    
+                    summaries.push(summary)
+                    let source = `[${title}](${url})`
+                    sources.push(source)
+                    counter++;
+
+                    //todo make this variable regarding how many sources we take
+                    if (counter == 5){
+                        break;
+                    }
+                
+                }
+            
+
+                
+                for(let i = 0; i < summaries.length; i++){
+
+                    message += `#### ${sources[i]}\n`
+                    message += summaries[i] + '\n\n' 
+
+                }
+
+
+
+                
+            }
+
+            editor.replaceRange(message, editor.getCursor())
+            this.status.setText('🧑‍🚀: VC Copilot ready')
+            this.status.setAttr('title', 'Copilot is ready')
+
+
+        }
+        catch (error){
+            console.log(`Error while doing competitive research: ${error}`)
+            new Notice(`Error while doing competitive research`)
+        }
+
+
+        
+    }
+
+    async specific_web_research(task: string, website: string, search_query: string, editor:Editor){
+        let presentation_prompt = 'Summarize the following paragraphs.'
+        let title = 'New Section'
+        if(task.toLowerCase() == 'competition'){
+
+            title = 'Competition Research'
+
+            presentation_prompt = `Highlight the most important facts for an investor from the following paragraphs. If there are none, say "Nothing". Otherwise always respond in the following format: 
+            - Problems to be solved
+            - Product and Technology
+            - Money raised
+            - Team
+            - Other important points`
+
+        }
+
+
+        this.websearch_and_summary(title, website, search_query, presentation_prompt,  editor)
 
     }
 

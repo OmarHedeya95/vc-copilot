@@ -19,11 +19,26 @@ export class TextInputModal extends Modal {
       if (this.type == 'defensibility'){title = 'Describe the startup whose defensibility is to be evaluated'}
       if (this.type == 'evaluate'){title = 'Describe the startup to be evaluated'}
       if (this.type == 'fireflies-summary') {title = 'Insert the name of the fireflies recording/meeting you would like to summarize'}
+      if (this.type == 'HackerNews Research') {
+        title = 'What topic would you like to research on Hackernews?'
+        let query = new Setting(contentEl).setName("Search Query").addText((text) => {})
+        let web = new Setting(contentEl).setName("Website to Search").addText((text) => {})
+        
+      }
       contentEl.createEl('h2', { text: title });
+
+
+
+      
   
-      //new Setting(contentEl).setName("Input")
-      //const inputEl = contentEl.createEl('input', { type: 'text' });
       const inputEl = contentEl.createEl('textarea');
+
+
+
+
+
+
+
       inputEl.addEventListener('input', (event) => {
         event.stopPropagation();
       });
@@ -32,14 +47,65 @@ export class TextInputModal extends Modal {
       submitButton.style.position = 'absolute';
       submitButton.style.bottom = '0';
       submitButton.style.right = '0'
+      
       submitButton.addEventListener('click', () => {
-        this.onsubmit(inputEl.value);
+        this.onsubmit(inputEl.value); //inputEl.value
         this.close();
       });
+    
     }
     onClose() {
         let { contentEl } = this;
         contentEl.empty();
       }
+}
+
+export class MultipleTextInputModal extends Modal {
+  input: string;
+  onsubmit: (input: string) => void;
+  type: string;
+  query: string;
+  website: string;
+  task: string;
+
+
+  constructor(app: App, type:string,  onsubmit: (input: string) => void) {
+    super(app);
+    this.onsubmit = onsubmit;
+    this.type = type;
+    }
+
+  onOpen() {
+    const { contentEl } = this;
+    let title = 'What topic would you like to research today?'
+    contentEl.createEl('h2', { text: title });
+
+    let query = new Setting(contentEl).setName("Search Query").addText((text) => text.onChange((value) => {this.query = value}))
+    let web = new Setting(contentEl).setName("Website to Search").addText((text) => text.onChange((value) => {this.website = value}))
+
+    new Setting(contentEl).setName("Task to do").addDropdown((menu) => {
+      menu.addOption("competition", "Find & Analyze competitors")
+      menu.setValue("....")
+      menu.onChange((value) => {this.task = value})
+    })
+
+    let button = new Setting(contentEl).addButton((btn) => {
+      btn.setButtonText("Submit").setCta().onClick(() => {
+        this.close();
+        this.onsubmit(this.website + ', ' + this.query + ', ' + this.task)
+
+    })})
+
+
+
+
+
+
+
+    
   }
+
+  
+
+}
 
