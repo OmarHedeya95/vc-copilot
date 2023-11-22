@@ -25,6 +25,7 @@ export class TextInputModal extends Modal {
         let web = new Setting(contentEl).setName("Website to Search").addText((text) => {})
         
       }
+      if(this.type == 'competition'){title = 'Describe the startup or industry for competition research'}
       contentEl.createEl('h2', { text: title });
 
 
@@ -85,6 +86,7 @@ export class MultipleTextInputModal extends Modal {
 
     new Setting(contentEl).setName("Task to do").addDropdown((menu) => {
       menu.addOption("competition", "Find & Analyze competitors")
+      menu.addOption("market-research", "Market Research")
       menu.setValue("....")
       menu.onChange((value) => {this.task = value})
     })

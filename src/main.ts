@@ -625,7 +625,7 @@ export default class VCCopilotPlugin extends Plugin{
             id: 'competition-research-command',
             name: 'Competition Research',
             editorCallback: (editor: Editor) => {
-              const inputModal = new TextInputModal(this.app, 'Describe the startup or the industry for competition research',(input) => {
+              const inputModal = new TextInputModal(this.app, 'competition',(input) => {
                 // Handle the submitted text here
                 console.log('Submitted text:', input);
                 this.competition_research(input, editor);
@@ -647,7 +647,7 @@ export default class VCCopilotPlugin extends Plugin{
                 let query = result[1]
                 let task = result[2]
                 console.log('Submitted text:', input);
-                this.specific_web_research(task, website, query, editor);
+                this.custom_search(task, website, query, editor) //specific_web_research(task, website, query, editor);
 
               });
               inputModal.open();
@@ -757,6 +757,78 @@ export default class VCCopilotPlugin extends Plugin{
 
     }
 
+    async defensibility_analysis (startup_description: string, editor: Editor){
+                        
+        let system_prompt: string = "Use the following guidelines to determine what kinds of defensibility a startup can build with time:\n\
+        - **Network effect**: When every user creates more value for other users, forming a positive feedback loop. This can be local or global, and is one of the few forms of defensibility that can arise immediately upon launch of a company.\n\
+        - **Platform effect**: When a company becomes a sticky product because so many other companies have integrated against it. This usually comes after a company has enough users that others want to build against its platform to reach them.\n\
+        - **Integrations**: When a company integrates against many other APIs, code bases, etc. that are hard to reproduce, or when a company's services do integrations for the company against other vendors. This makes it hard to displace the company as each implementation is a unique and complex process.\n\
+        - **Building a ton of stuff**: When a company bundles and cross sells products that prevent other companies from finding a wedge to compete with them, or when a company has a big product footprint that makes it hard for new entrants to reach feature parity.\n\
+        - **Deals**: When a company secures early access, exclusive provider or distribution, or backend deals that give it scale, brand, or access advantages over competitors. This may include deals with APIs, data sources, regulators, or customers.\n\
+        - **Sales as moat**: When a company locks in customers with long term contracts, or has a sales process that makes it easier for enterprises to buy from them than from new suppliers. This may include security reviews, procurement processes, or pricing strategies.\n\
+        - **Regulatory**: When a company receives regulatory approvals that provide a moat. This may include licenses, permits, or exemptions that are hard to obtain or replicate by competitors.\n\
+        - **Data or system of record effect**: When a company has unique or proprietary data, or owns a customer's data or has a long historical record of it. This can create defensibility by making the data more valuable and harder to switch away from. Similarly, being a system of record for a user, entity, etc. can be a powerful position to be in.\n\
+        - **Scale effects**: When a company has access to large sums of money or business volume that allows it to do things that will make it difficult for competitors to upend them. This may include capital scale, business scale and negotiation, or pricing advantages.\n\
+        - **Open source**: When a company benefits from being the creator or contributor of an open source software project that is widely used or adopted by developers. This can create defensibility by giving the company brand recognition, community influence, and talent access.\n\
+        - **Brand**: When a company becomes synonymous with the thing they do, often by creating a new product category, or doing something vastly better than competitors. This can create defensibility by making the company the default choice for customers and creating loyalty and trust.\n\
+        - **IP moat**: When a company has intellectual property that protects its product or technology from being copied or infringed by competitors. This tends to be more effective in hard tech or biotech companies than most consumer or SaaS products.\n\
+        - **Speed**: When a company can execute faster and better than competitors, especially incumbents. This can create defensibility by allowing the company to iterate quickly, respond to customer feedback, and hire and close candidates faster.\n\
+        - **Pricing**: When a company can offer a lower price than competitors due to a lower cost structure, a lack of an existing product to cannibalize, or a different business model. This can create defensibility by attracting more customers and creating higher margins.\n\
+        - **New business models**: When a company can innovate on business model to create a higher leverage business or different incentive structure. This can create defensibility by disrupting incumbents who are used to traditional ways of doing things.\nAlways think step by step!"
+                        
+        let query = 'Startup Description:\n' + startup_description + '\nWhat types of defensibility does this startup have? Which types of defensibility does it lack or could improve upon? Let us think step by step'
+                        
+
+        this.status.setText('🧑‍🚀: VC Copilot analyzing defensibility...')
+        this.status.setAttr('title', 'VC Copilot is analyzing defensibility of the startup...')
+        let analysis = await openai_js(query, system_prompt, 1024, 1.0)
+
+        analysis = '## Defensibility Analysis\n' + analysis
+        
+        editor.replaceRange(analysis, editor.getCursor());
+
+        this.status.setText('🧑‍🚀: VC Copilot ready')
+        this.status.setAttr('title', 'VC Copilot is ready')
+    }
+
+    async guidance_workflow(startup_description: string, editor: Editor){
+        let system_prompt = "You are a helpful assistant to a venture capital investor. Your main job is guiding the investor to always focus on the bigger picture and find the core arguments they should focus us. Your arguments are always concise and to the point. When needed, you can guide the investor by asking questions that help them focus on the essentials.\n\
+In your analysis, you should always be customer-centric and focused on the target customer of the startup.\n\
+The following aspects are extremely crucial to the investor:\n\
+- Who is the target customer for the startup?\n\
+- What is the hardest part about the job of the target customer?\n\
+- What is the startup's unique value proposition for the target customer?"
+
+    let query = 'Startup Description:\n' + startup_description + '\nWhat is the core problem this startup is solving? Give a concise answer.'
+    let user_queries = []
+    user_queries.push(query)
+    let hypothesis = "What are the core hypotheses the startup has to validate to prove that solving this core problem is important enough to allow them to build a unicorn?"
+    user_queries.push(hypothesis)
+    let classify = "Recommend some suitable product categories to classify the product"
+    user_queries.push(classify)
+
+    this.status.setText('🧑‍🚀: VC Copilot analyzing startup...')
+    this.status.setAttr('title', 'VC Copilot is analyzing the startup...')
+    let replies = await openai_js_multiturn(user_queries, system_prompt, 1024, 1.0)
+
+    replies[0] = '#### Core Problem\n' + replies[0] + '\n'
+    replies[1] = '#### Hypotheses\n' + replies [1] + '\n'
+    replies [2] = '#### Categories\n' + replies[2] + '\n'
+
+    let final_text = replies[0] + replies[1] + replies[2]
+
+    editor.replaceRange(final_text, editor.getCursor());
+
+    this.status.setText('🧑‍🚀: VC Copilot ready')
+    this.status.setAttr('title', 'VC Copilot is ready')
+
+
+
+    }
+
+
+
+
     async fireflies_summary(meeting_name: string, editor: Editor){
         this.status.setText(`🧑‍🚀 🔎: VC Copilot reading the transcript of ${meeting_name}...`)
         this.status.setAttr('title', 'Copilot is reading the transcript')
@@ -840,8 +912,110 @@ export default class VCCopilotPlugin extends Plugin{
 
     }
 
-    
 
+    async market_research(industry: string, editor: Editor){
+
+        this.status.setText('🧑‍🚀 🔎: VC Copilot researching the market...')
+        this.status.setAttr('title', 'Copilot is researching the market...')
+
+        let res;
+
+        try{
+
+        
+
+            let websites = ["", "globenewswire.com", "statista.com"]
+            
+            //for (let website of websites)
+            //{
+
+                
+                let user_prompt = `What facts about the ${industry} market can an investor learn from the following paragraphs? If there are no facts to learn simply output \"Nothing\"`
+                let query = `${industry} industry market report.`
+
+                //!todo I am having sort of a racing issue here and further materials keeps getting repeated
+                //this.specific_web_research('market-research', website, query, editor)
+
+                
+                let promises = websites.map(website => this.specific_web_research('market-research', website, query, editor))
+                let results = await Promise.all(promises)
+                let message = results.join('\n\n')
+
+
+
+                message += '#### Further Material\n'
+                message += 'Here are some reading material for further information\n\n'
+                query = `${industry} industry primer pdf`
+
+
+                let pdfs = await this.you_research(query)
+    
+                for (let element of pdfs){
+                        
+                    let snippets = element['snippets']
+                    let title = element['title']
+                    let url = element['url']
+                    message += '- ' + `[${title}](${url})` + '\n'
+                }
+
+                //message = message.replace(/### Market Research/gm, '')
+                message = '## Market Research\n' + message
+
+                this.displaymessage(message, editor)
+
+
+                
+            //}
+
+
+        }
+        catch (error){
+            console.log(`Error when doing market research: ${error}`)
+            new Notice(`Error when doing market research`)
+        }
+
+    }
+
+    async competition_research(query: string, editor: Editor){
+
+
+        try{
+
+        
+
+            let websites = ["techcrunch.com", "businessinsider.com"]//, "news.ycombinator.com", "sifted.eu", "reddit.com"]            
+            //for (let website of websites)
+            //{
+
+                
+                let promises = websites.map(website => this.specific_web_research('competition', website, query, editor))
+                let results = await Promise.all(promises)
+                let message = results.join('\n\n')
+
+                //message = message.replace(/### Competition Research/gm, '')
+                message = '## Competition Research\n' + message
+                this.displaymessage(message, editor)
+
+
+                
+            //}
+
+
+        }
+        catch (error){
+            console.log(`Error when doing market research: ${error}`)
+            new Notice(`Error when doing market research`)
+        }
+
+    }
+
+    //Helper search methods
+
+    async displaymessage(message: string, editor: Editor){
+        editor.replaceRange(message, editor.getCursor())
+        this.status.setText('🧑‍🚀: VC Copilot ready')
+        this.status.setAttr('title', 'Copilot is ready')
+}
     async you_research(query: string){
         let results = await request({
             url: `https://api.ydc-index.io/search?query=${query}`, 
@@ -861,140 +1035,7 @@ export default class VCCopilotPlugin extends Plugin{
 
     }
 
-    async market_research(industry: string, editor: Editor){
-
-        this.status.setText('🧑‍🚀 🔎: VC Copilot researching the market...')
-        this.status.setAttr('title', 'Copilot is researching the market...')
-
-        let res;
-
-        try{
-
-            const configuration = new Configuration({
-                apiKey: openaiAPIKey,
-            });
-            //to avoid an annoying error/warning message
-            delete configuration.baseOptions.headers['User-Agent'];
-            const openai = new OpenAIApi(configuration);
-
-
-
-
-            let message = '## Market Research\n';
-
-        
-
-            let websites = ["", "globenewswire.com", "statista.com"]
-            
-            for (let website of websites)
-            {
-                this.status.setText(`🧑‍🚀 🔎: VC Copilot ${website} research...`)
-                this.status.setAttr('title', `Copilot is researching ${website}...`)
-
-                let summaries = []
-                let sources = []
-                let query = `site:${website} ${industry} industry market report.`
-
-
-                let result = await this.you_research(query)
-
-
-                let counter = 0;
-                
-                let user_prompt = `What facts about the ${industry} market can an investor learn from the following paragraphs? If there are no facts to learn simply output \"Nothing\"`
-        
-                for (let element of result){
-                    
-                    let snippets = element['snippets']
-                    let title = element['title']
-                    let url = element['url']
-
-                    let summary = ''
-
-                    for (let i = 0; i < snippets.length; i+=5){
-                        let paragraphs = snippets.slice(i, i+5)
-                        paragraphs[0] = '- ' + paragraphs[0]
-                        let string_paragraphs = paragraphs.join('\n\n- ')
-
-                        const response = await openai.createChatCompletion({
-                            model: "gpt-4-1106-preview", //gpt-4 gpt-3.5-turbo  gpt-4-1106-preview
-                            messages: [
-                            {
-                                "role": "system",
-                                "content": "Act as an investigative journalist who is obsessed with the truth and accuracy. You always give answers in bullet points."
-                            },
-                            {
-                                "role": "user",
-                                "content": `${user_prompt}` + '\nParagraphs:\n' + string_paragraphs 
-                            }
-                            ],
-                            temperature: 0,
-                            max_tokens: 1024,
-                            top_p: 1,
-                            frequency_penalty: 0,
-                            presence_penalty: 0,
-                        });
-
-                        summary += response.data.choices[0].message.content + '\n'
-
-                    }
-                    
-                    summaries.push(summary)
-                    let source = `[${title}](${url})`
-                    sources.push(source)
-                    counter++;
-
-                    if (counter == 2){
-                        break;
-                    }
-                
-                }
-            
-
-                
-                for(let i = 0; i < summaries.length; i++){
-
-                    message += `#### ${sources[i]}\n`
-                    message += summaries[i] + '\n\n' 
-
-                }
-
-
-
-                
-            }
-
-            message += '#### Further Material\n'
-            message += 'Here are some reading material for further information\n\n'
-
-            let query = `${industry} industry primer pdf`
-
-
-            let pdfs = await this.you_research(query)
-
-            for (let element of pdfs){
-                    
-                let snippets = element['snippets']
-                let title = element['title']
-                let url = element['url']
-                message += '- ' + `[${title}](${url})` + '\n'
-            }
-
-
-
-
-            editor.replaceRange(message, editor.getCursor())
-            this.status.setText('🧑‍🚀: VC Copilot ready')
-            this.status.setAttr('title', 'Copilot is ready')
-        }
-        catch (error){
-            console.log(`Error when doing market research: ${error}`)
-            new Notice(`Error when doing market research`)
-        }
-
-    }
-
-    async websearch_and_summary(task: string, website: string, search_query: string, presentation_prompt: string, editor: Editor){
+    async execute_search_task(task: string, website: string, search_query: string, presentation_prompt: string, editor: Editor){
 
         this.status.setText('🧑‍🚀 🔎: VC Copilot surfing the internet...')
         this.status.setAttr('title', 'Copilot is surfing...')
@@ -1008,95 +1049,90 @@ export default class VCCopilotPlugin extends Plugin{
             delete configuration.baseOptions.headers['User-Agent'];
             const openai = new OpenAIApi(configuration);
 
+            let website_name = ''
+            if (website == ''){website_name = 'general research'}
+            else{website_name = website.split('.')[0]}
 
 
+            let message = `#### ${task} through ${website_name}\n`;
 
-            let message = `## ${task}\n`;
+            //this.status.setText(`🧑‍🚀 🔎: VC Copilot ${website} research...`)
+            //this.status.setAttr('title', `Copilot is researching ${website}...`)
 
-        
+            let summaries = []
+            let sources = []
+            
+            let query = `site:${website} ${search_query}`
 
 
-                this.status.setText(`🧑‍🚀 🔎: VC Copilot ${website} research...`)
-                this.status.setAttr('title', `Copilot is researching ${website}...`)
+            let result = await this.you_research(query)
 
-                let summaries = []
-                let sources = []
+
+            let counter = 0;
+            
+            let user_prompt = presentation_prompt
+
+            for (let element of result){
                 
-                let query = `site:${website} ${search_query}`
+                let snippets = element['snippets']
+                let title = element['title']
+                let url = element['url']
 
+                let summary = ''
 
-                let result = await this.you_research(query)
+                //for (let i = 0; i < snippets.length; i+=5){
+                    let paragraphs = snippets    //.slice(i, i+5) //todo 128k context, maybe do it all in one go. potentially change this?
+                    paragraphs[0] = '- ' + paragraphs[0]
+                    let string_paragraphs = paragraphs.join('\n\n- ')
+                if (string_paragraphs && string_paragraphs.length > 1){
+                    const response = await openai.createChatCompletion({
+                        model: "gpt-4-1106-preview", //gpt-4 gpt-3.5-turbo  gpt-4-1106-preview
+                        messages: [
+                        {
+                            "role": "system",
+                            "content": "Act as an investigative journalist who is obsessed with the truth and accuracy. You always give answers in bullet points."
+                        },
+                        {
+                            "role": "user",
+                            "content": `${user_prompt}` + '\nParagraphs:\n' + string_paragraphs 
+                        }
+                        ],
+                        temperature: 0,
+                        max_tokens: 1024,
+                        top_p: 1,
+                        frequency_penalty: 0,
+                        presence_penalty: 0,
+                    });
 
+                    summary += response.data.choices[0].message.content + '\n'
+                }
 
-                let counter = 0;
+                //}
                 
-                let user_prompt = presentation_prompt
+                summaries.push(summary)
+                let source = `[${title}](${url})`
+                sources.push(source)
+                counter++;
 
-                for (let element of result){
-                    
-                    let snippets = element['snippets']
-                    let title = element['title']
-                    let url = element['url']
-
-                    let summary = ''
-
-                    //for (let i = 0; i < snippets.length; i+=5){
-                        let paragraphs = snippets    //.slice(i, i+5) //todo 128k context, maybe do it all in one go. potentially change this?
-                        paragraphs[0] = '- ' + paragraphs[0]
-                        let string_paragraphs = paragraphs.join('\n\n- ')
-                    if (string_paragraphs && string_paragraphs.length > 1){
-                        const response = await openai.createChatCompletion({
-                            model: "gpt-4-1106-preview", //gpt-4 gpt-3.5-turbo  gpt-4-1106-preview
-                            messages: [
-                            {
-                                "role": "system",
-                                "content": "Act as an investigative journalist who is obsessed with the truth and accuracy. You always give answers in bullet points."
-                            },
-                            {
-                                "role": "user",
-                                "content": `${user_prompt}` + '\nParagraphs:\n' + string_paragraphs 
-                            }
-                            ],
-                            temperature: 0,
-                            max_tokens: 1024,
-                            top_p: 1,
-                            frequency_penalty: 0,
-                            presence_penalty: 0,
-                        });
-
-                        summary += response.data.choices[0].message.content + '\n'
-                    }
-
-                    //}
-                    
-                    summaries.push(summary)
-                    let source = `[${title}](${url})`
-                    sources.push(source)
-                    counter++;
-
-                    //todo make this variable regarding how many sources we take
-                    if (counter == 5){
-                        break;
-                    }
-                
+                //todo make this variable regarding how many sources we take
+                if (counter == 5){
+                    break;
                 }
             
+            }
+        
 
-                
-                for(let i = 0; i < summaries.length; i++){
+            
+            for(let i = 0; i < summaries.length; i++){
 
-                    message += `#### ${sources[i]}\n`
-                    message += summaries[i] + '\n\n' 
+                message += `##### ${sources[i]}\n`
+                message += summaries[i] + '\n\n' 
 
-                }
+            }
+
+            return message;
 
 
-
-                
-
-            editor.replaceRange(message, editor.getCursor())
-            this.status.setText('🧑‍🚀: VC Copilot ready')
-            this.status.setAttr('title', 'Copilot is ready')
 
 
         }
@@ -1105,128 +1141,15 @@ export default class VCCopilotPlugin extends Plugin{
             new Notice(`Error while doing research`)
         }
 
+        return "";
+
 
     }
 
-    async competition_research(description: string, editor: Editor){
+    async custom_search(task: string, website: string, search_query: string, editor:Editor){
 
-        this.status.setText('🧑‍🚀 🔎: VC Copilot researching the competition...')
-        this.status.setAttr('title', 'Copilot is researching the competition...')
-
-        try{
-
-            const configuration = new Configuration({
-                apiKey: openaiAPIKey,
-            });
-            //to avoid an annoying error/warning message
-            delete configuration.baseOptions.headers['User-Agent'];
-            const openai = new OpenAIApi(configuration);
-
-
-
-
-            let message = '## Competition Research\n';
-
-        
-
-            let websites = ["techcrunch.com", "businessinsider.com"]//, "news.ycombinator.com", "sifted.eu", "reddit.com"]
-            
-            for (let website of websites)
-            {
-                this.status.setText(`🧑‍🚀 🔎: VC Copilot ${website} research...`)
-                this.status.setAttr('title', `Copilot is researching ${website}...`)
-
-                let summaries = []
-                let sources = []
-                let query = `site:${website} ${description}`
-
-
-                let result = await this.you_research(query)
-
-
-                let counter = 0;
-                
-                let user_prompt = `Highlight the most important facts for an investor from the following paragraphs. Always respond in the following format: 
-                - problems to be solved
-                - product and technology
-                - money raised
-                - team
-                - other important points`
-
-                for (let element of result){
-                    
-                    let snippets = element['snippets']
-                    let title = element['title']
-                    let url = element['url']
-
-                    let summary = ''
-
-                    //for (let i = 0; i < snippets.length; i+=5){
-                        let paragraphs = snippets//.slice(i, i+5) //todo 128k context, maybe do it all in one go. potentially change this?
-                        paragraphs[0] = '- ' + paragraphs[0]
-                        let string_paragraphs = paragraphs.join('\n\n- ')
-
-                        const response = await openai.createChatCompletion({
-                            model: "gpt-4-1106-preview", //gpt-4 gpt-3.5-turbo  gpt-4-1106-preview
-                            messages: [
-                            {
-                                "role": "system",
-                                "content": "Act as an investigative journalist who is obsessed with the truth and accuracy. You always give answers in bullet points."
-                            },
-                            {
-                                "role": "user",
-                                "content": `${user_prompt}` + '\nParagraphs:\n' + string_paragraphs 
-                            }
-                            ],
-                            temperature: 0,
-                            max_tokens: 1024,
-                            top_p: 1,
-                            frequency_penalty: 0,
-                            presence_penalty: 0,
-                        });
-
-                        summary += response.data.choices[0].message.content + '\n'
-
-                    //}
-                    
-                    summaries.push(summary)
-                    let source = `[${title}](${url})`
-                    sources.push(source)
-                    counter++;
-
-                    //todo make this variable regarding how many sources we take
-                    if (counter == 5){
-                        break;
-                    }
-                
-                }
-            
-
-                
-                for(let i = 0; i < summaries.length; i++){
-
-                    message += `#### ${sources[i]}\n`
-                    message += summaries[i] + '\n\n' 
-
-                }
-
-
-
-                
-            }
-
-            editor.replaceRange(message, editor.getCursor())
-            this.status.setText('🧑‍🚀: VC Copilot ready')
-            this.status.setAttr('title', 'Copilot is ready')
-
-
-        }
-        catch (error){
-            console.log(`Error while doing competitive research: ${error}`)
-            new Notice(`Error while doing competitive research`)
-        }
-
-
+        let message = await this.specific_web_research(task, website, search_query, editor)
+        this.displaymessage(message, editor)
         
     }
 
@@ -1245,80 +1168,21 @@ export default class VCCopilotPlugin extends Plugin{
             - Other important points`
 
         }
+        else if(task.toLowerCase() == 'market-research'){
+
+            title = "Market Research"
+            let industry = search_query.split('industry market')[0]
+            presentation_prompt = `What facts about the ${industry} market can an investor learn from the following paragraphs? If there are no facts to learn simply output \"Nothing\"`
+
+        }
 
 
-        this.websearch_and_summary(title, website, search_query, presentation_prompt,  editor)
+        let message = await this.execute_search_task(title, website, search_query, presentation_prompt,  editor)
+        return message;
 
     }
 
-    async defensibility_analysis (startup_description: string, editor: Editor){
-                        
-        let system_prompt: string = "Use the following guidelines to determine what kinds of defensibility a startup can build with time:\n\
-        - **Network effect**: When every user creates more value for other users, forming a positive feedback loop. This can be local or global, and is one of the few forms of defensibility that can arise immediately upon launch of a company.\n\
-        - **Platform effect**: When a company becomes a sticky product because so many other companies have integrated against it. This usually comes after a company has enough users that others want to build against its platform to reach them.\n\
-        - **Integrations**: When a company integrates against many other APIs, code bases, etc. that are hard to reproduce, or when a company's services do integrations for the company against other vendors. This makes it hard to displace the company as each implementation is a unique and complex process.\n\
-        - **Building a ton of stuff**: When a company bundles and cross sells products that prevent other companies from finding a wedge to compete with them, or when a company has a big product footprint that makes it hard for new entrants to reach feature parity.\n\
-        - **Deals**: When a company secures early access, exclusive provider or distribution, or backend deals that give it scale, brand, or access advantages over competitors. This may include deals with APIs, data sources, regulators, or customers.\n\
-        - **Sales as moat**: When a company locks in customers with long term contracts, or has a sales process that makes it easier for enterprises to buy from them than from new suppliers. This may include security reviews, procurement processes, or pricing strategies.\n\
-        - **Regulatory**: When a company receives regulatory approvals that provide a moat. This may include licenses, permits, or exemptions that are hard to obtain or replicate by competitors.\n\
-        - **Data or system of record effect**: When a company has unique or proprietary data, or owns a customer's data or has a long historical record of it. This can create defensibility by making the data more valuable and harder to switch away from. Similarly, being a system of record for a user, entity, etc. can be a powerful position to be in.\n\
-        - **Scale effects**: When a company has access to large sums of money or business volume that allows it to do things that will make it difficult for competitors to upend them. This may include capital scale, business scale and negotiation, or pricing advantages.\n\
-        - **Open source**: When a company benefits from being the creator or contributor of an open source software project that is widely used or adopted by developers. This can create defensibility by giving the company brand recognition, community influence, and talent access.\n\
-        - **Brand**: When a company becomes synonymous with the thing they do, often by creating a new product category, or doing something vastly better than competitors. This can create defensibility by making the company the default choice for customers and creating loyalty and trust.\n\
-        - **IP moat**: When a company has intellectual property that protects its product or technology from being copied or infringed by competitors. This tends to be more effective in hard tech or biotech companies than most consumer or SaaS products.\n\
-        - **Speed**: When a company can execute faster and better than competitors, especially incumbents. This can create defensibility by allowing the company to iterate quickly, respond to customer feedback, and hire and close candidates faster.\n\
-        - **Pricing**: When a company can offer a lower price than competitors due to a lower cost structure, a lack of an existing product to cannibalize, or a different business model. This can create defensibility by attracting more customers and creating higher margins.\n\
-        - **New business models**: When a company can innovate on business model to create a higher leverage business or different incentive structure. This can create defensibility by disrupting incumbents who are used to traditional ways of doing things.\nAlways think step by step!"
-                        
-        let query = 'Startup Description:\n' + startup_description + '\nWhat types of defensibility does this startup have? Which types of defensibility does it lack or could improve upon? Let us think step by step'
-                        
 
-        this.status.setText('🧑‍🚀: VC Copilot analyzing defensibility...')
-        this.status.setAttr('title', 'VC Copilot is analyzing defensibility of the startup...')
-        let analysis = await openai_js(query, system_prompt, 1024, 1.0)
-
-        analysis = '## Defensibility Analysis\n' + analysis
-        
-        editor.replaceRange(analysis, editor.getCursor());
-
-        this.status.setText('🧑‍🚀: VC Copilot ready')
-        this.status.setAttr('title', 'VC Copilot is ready')
-    }
-
-    async guidance_workflow(startup_description: string, editor: Editor){
-        let system_prompt = "You are a helpful assistant to a venture capital investor. Your main job is guiding the investor to always focus on the bigger picture and find the core arguments they should focus us. Your arguments are always concise and to the point. When needed, you can guide the investor by asking questions that help them focus on the essentials.\n\
-In your analysis, you should always be customer-centric and focused on the target customer of the startup.\n\
-The following aspects are extremely crucial to the investor:\n\
-- Who is the target customer for the startup?\n\
-- What is the hardest part about the job of the target customer?\n\
-- What is the startup's unique value proposition for the target customer?"
-
-    let query = 'Startup Description:\n' + startup_description + '\nWhat is the core problem this startup is solving?'
-    let user_queries = []
-    user_queries.push(query)
-    let hypothesis = "What are the core hypotheses the startup has to validate to prove that solving this core problem is important enough to allow them to build a unicorn?"
-    user_queries.push(hypothesis)
-    let classify = "Recommend some suitable product categories to classify the product"
-    user_queries.push(classify)
-
-    this.status.setText('🧑‍🚀: VC Copilot analyzing startup...')
-    this.status.setAttr('title', 'VC Copilot is analyzing the startup...')
-    let replies = await openai_js_multiturn(user_queries, system_prompt, 1024, 1.0)
-
-    replies[0] = '#### Core Problem\n' + replies[0] + '\n'
-    replies[1] = '#### Hypotheses\n' + replies [1] + '\n'
-    replies [2] = '#### Categories\n' + replies[2] + '\n'
-
-    let final_text = replies[0] + replies[1] + replies[2]
-
-    editor.replaceRange(final_text, editor.getCursor());
-
-    this.status.setText('🧑‍🚀: VC Copilot ready')
-    this.status.setAttr('title', 'VC Copilot is ready')
-
-
-
-}
 
     
 
