@@ -1018,20 +1018,12 @@ The following aspects are extremely crucial to the investor:\n\
 }
     async you_research(query: string){
         let results = await request({
-            url: `https://api.ydc-index.io/search?query=${query}`, 
-            method: 'GET',
-            headers: {'X-API-Key': you_api_key} 
-        
+            url: `https://you-researcher-container-xm5lmdnsxq-uc.a.run.app/search?query=${query}`,
+            method: 'GET'
         })
-        //.then(response => response.json())
-        .then(response => {
-            return response
-            
-        })
-        .catch(err => console.error(err));
+        return await JSON.parse(results)['hits']
 
-        //var json = JSON.stringify(results, null, 2)
-        return JSON.parse(results)['hits']
+
 
     }
 
