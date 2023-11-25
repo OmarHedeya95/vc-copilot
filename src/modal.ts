@@ -1,5 +1,4 @@
-import { App, Modal, Setting} from 'obsidian';
-
+import { App, Modal, Setting, FuzzySuggestModal, TFile} from 'obsidian';
 export class TextInputModal extends Modal {
     input: string;
     onsubmit: (input: string) => void;
@@ -105,4 +104,34 @@ export class MultipleTextInputModal extends Modal {
   
 
 }
+
+
+export class PDFModal extends FuzzySuggestModal<TFile> {
+
+  onsubmit: (input: string) => void;
+
+  constructor(app: App, onsubmit: (input: string) => void) {
+    super(app);
+    this.onsubmit = onsubmit;
+    }
+
+
+  getItems(): TFile[] {
+    return this.app.vault.getFiles().filter((file)=> file.extension.includes('pdf'))
+    //return ALL_BOOKS;
+  }
+
+  getItemText(file: TFile): string {
+    return file.name;
+  }
+
+  onChooseItem(file: TFile, evt: MouseEvent | KeyboardEvent) {
+    //new Notice(`Selected ${file.path}`);
+    
+    //let x = fs.createReadStream(file.path)
+    this.onsubmit(file.path)
+    
+  }
+}
+
 

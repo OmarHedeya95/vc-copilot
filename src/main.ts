@@ -1,7 +1,9 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, Menu, MenuItem, MarkdownFileInfo, TFile, TAbstractFile, request, EditorPosition} from 'obsidian';
-const { Configuration, OpenAIApi } = require("openai");
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, Menu, MenuItem, MarkdownFileInfo, TFile, TAbstractFile, request, EditorPosition, FileSystemAdapter} from 'obsidian';
+//const { Configuration, OpenAIApi } = require("openai");
 import {get_startup_by_name, add_notes_to_company, get_person_by_name, get_person_details, is_person_in_venture_network, get_field_values, add_entry_to_list, add_field_value, add_notes_to_person} from "./utils";
-import { MultipleTextInputModal, TextInputModal } from 'modal';
+import { PDFModal, MultipleTextInputModal, TextInputModal } from 'modal';
+import fs from 'fs'
+import OpenAI, {toFile} from "openai";
 
 
 
@@ -13,6 +15,8 @@ let connection_owner_field = '10'
 let venture_network_list = '500'
 let investor_names: string[] = []
 let fireflies_api_key = ''
+let intervalId: any;
+let openai: OpenAI;
 
 interface ButlerSettings {
     affinityKey: string;
@@ -32,22 +36,17 @@ const DEFAULT_SETTINGS: ButlerSettings = {
     connection_owner_field_id: '100',
     venture_network_list_id: '500',
     team_names: 'Ben Horrowitz, Vinod Khosla',
-    fireflies_api: 'default'
+    fireflies_api: 'default',
 
 }
 
 
-async function openai_js(query: String, system_prompt: String, max_tokens: number = 256, temperature: number = 0.3){
-    const configuration = new Configuration({
-        apiKey: openaiAPIKey,
-      });
-      //to avoid an annoying error/warning message
-      delete configuration.baseOptions.headers['User-Agent'];
-
-      const openai = new OpenAIApi(configuration);
-      const system_message = system_prompt
+async function openai_js(query: string, system_prompt: string, max_tokens: number = 256, temperature: number = 0.3){
+    
+    
+    const system_message = system_prompt
       
-    const response = await openai.createChatCompletion({
+    const response = await openai.chat.completions.create({
         model: "gpt-4-1106-preview",
         temperature: temperature,
         max_tokens: max_tokens,
@@ -57,34 +56,34 @@ async function openai_js(query: String, system_prompt: String, max_tokens: numbe
         ]
       });
     
-    let summary = response.data.choices[0].message.content
+    let summary = response.choices[0].message.content
     return summary
 }
 
-async function openai_js_multiturn(queries: string[], system_prompt: String, max_tokens: number = 256, temperature: number = 0.3){
-    const configuration = new Configuration({
-        apiKey: openaiAPIKey,
-      });
-      //to avoid an annoying error/warning message
-      delete configuration.baseOptions.headers['User-Agent'];
+async function openai_js_multiturn(queries: string[], system_prompt: string, max_tokens: number = 256, temperature: number = 0.3){
 
-      const openai = new OpenAIApi(configuration);
       const system_message = system_prompt
 
       let messages = [{role: "system", content: system_message}]
+      
       let replies = []
  
     for (let query of queries){
         messages.push({role: "user", content: query})
         console.log(messages)
-        const response = await openai.createChatCompletion({
+        
+        const response = await openai.chat.completions.create({
             model: "gpt-4-1106-preview",
             temperature: temperature,
             max_tokens: max_tokens,
             messages: messages
-          });
-        let assistant_reply = response.data.choices[0].message.content
-        messages.push({role: "assistant", content:assistant_reply})
+        });
+
+
+        let assistant_reply = response.choices[0].message.content
+        if (assistant_reply == null){assistant_reply = ""}
+
+        messages.push({role: "assistant", content: assistant_reply})
         replies.push(assistant_reply)
 
     }
@@ -477,11 +476,8 @@ function countWords(str: string) {
 }
 
 async function summarize_paragraph(paragraph: string){
-    const configuration = new Configuration({apiKey: openaiAPIKey})
-    delete configuration.baseOptions.headers['User-Agent'];
-    const openai = new OpenAIApi(configuration);
 
-    const response = await openai.createChatCompletion({
+    const response = await openai.chat.completions.create({
         model: "gpt-4-1106-preview", //gpt-4 gpt-3.5-turbo
         messages: [
           {
@@ -500,7 +496,7 @@ async function summarize_paragraph(paragraph: string){
         presence_penalty: 0,
       });
 
-    return response.data.choices[0].message.content
+    return response.choices[0].message.content
 }
 
 async function summarize_all_paragraphs_together(paragraphs: any []){
@@ -510,11 +506,8 @@ async function summarize_all_paragraphs_together(paragraphs: any []){
         input_text += `Summary #${i+1}:\n`
         input_text += paragraphs[i] + '\n\n'
     }
-    const configuration = new Configuration({apiKey: openaiAPIKey})
-    delete configuration.baseOptions.headers['User-Agent'];
-    const openai = new OpenAIApi(configuration);
 
-    const response = await openai.createChatCompletion({
+    const response = await openai.chat.completions.create({
         model: "gpt-4-1106-preview", // gpt-3.5-turbo
         messages: [
             {
@@ -533,11 +526,13 @@ async function summarize_all_paragraphs_together(paragraphs: any []){
         presence_penalty: 0,
     });  
 
-    return response.data.choices[0].message.content
+    return response.choices[0].message.content
     
     
 
 }
+
+
 
 
 
@@ -632,7 +627,22 @@ export default class VCCopilotPlugin extends Plugin{
             },
           });
 
-          //todo make this more generalizable, you need one input for search query, another for website to be used, another for the task you want.
+          this.addCommand({
+            id: 'deck-analysis',
+            name: 'Summarize Pitch Deck',
+            editorCallback: (editor: Editor) => {
+              const inputModal = new PDFModal(this.app, (selected_file)=>{
+                new Notice(`Selected: '${selected_file}`)
+                this.analyze_pitch_deck(selected_file, editor)
+
+              });
+              inputModal.open();
+            },
+          });
+
+
+
+
           this.addCommand({
             id: 'custom-research',
             name: 'Custom Research',
@@ -665,6 +675,8 @@ export default class VCCopilotPlugin extends Plugin{
             },
           });
 
+
+        openai = await new OpenAI({apiKey: openaiAPIKey, dangerouslyAllowBrowser: true})
         this.status.setText('🧑‍🚀: VC Copilot loading....')
         this.status.setAttr('title', 'VC Copilot is loading...')
 
@@ -806,9 +818,9 @@ The following aspects are extremely crucial to the investor:\n\
     this.status.setAttr('title', 'VC Copilot is analyzing the startup...')
     let replies = await openai_js_multiturn(user_queries, system_prompt, 1024, 1.0)
 
-    replies[0] = '#### Core Problem\n' + replies[0] + '\n'
-    replies[1] = '#### Hypotheses\n' + replies [1] + '\n'
-    replies [2] = '#### Categories\n' + replies[2] + '\n'
+    replies[0] = '## Analysis Workflow\n\n#### Core Problem\n\n' + replies[0] + '\n'
+    replies[1] = '#### Hypotheses\n\n' + replies [1] + '\n'
+    replies [2] = '#### Categories\n\n' + replies[2] + '\n'
 
     let final_text = replies[0] + replies[1] + replies[2]
 
@@ -1032,12 +1044,6 @@ The following aspects are extremely crucial to the investor:\n\
 
         try{
 
-            const configuration = new Configuration({
-                apiKey: openaiAPIKey,
-            });
-            //to avoid an annoying error/warning message
-            delete configuration.baseOptions.headers['User-Agent'];
-            const openai = new OpenAIApi(configuration);
 
             let website_name = ''
             if (website == ''){website_name = 'general research'}
@@ -1045,9 +1051,6 @@ The following aspects are extremely crucial to the investor:\n\
 
 
             let message = `#### ${task} through ${website_name}\n`;
-
-            //this.status.setText(`🧑‍🚀 🔎: VC Copilot ${website} research...`)
-            //this.status.setAttr('title', `Copilot is researching ${website}...`)
 
             let summaries = []
             let sources = []
@@ -1075,7 +1078,7 @@ The following aspects are extremely crucial to the investor:\n\
                     paragraphs[0] = '- ' + paragraphs[0]
                     let string_paragraphs = paragraphs.join('\n\n- ')
                 if (string_paragraphs && string_paragraphs.length > 1){
-                    const response = await openai.createChatCompletion({
+                    const response = await openai.chat.completions.create({
                         model: "gpt-4-1106-preview", //gpt-4 gpt-3.5-turbo  gpt-4-1106-preview
                         messages: [
                         {
@@ -1094,7 +1097,7 @@ The following aspects are extremely crucial to the investor:\n\
                         presence_penalty: 0,
                     });
 
-                    summary += response.data.choices[0].message.content + '\n'
+                    summary += response.choices[0].message.content + '\n' //response.data.choices[0].message.content + '\n'
                 }
 
                 //}
@@ -1175,6 +1178,164 @@ The following aspects are extremely crucial to the investor:\n\
 
 
 
+
+    //OpenAI Assistant functions
+
+    async analyze_pitch_deck(relative_path: string, editor: Editor){
+        //let absolute_path = vault_path + relative_path;
+        let vault_path = ''
+        let adapter = app.vault.adapter;
+        if (adapter instanceof FileSystemAdapter) {
+            vault_path = adapter.getBasePath();
+        }
+
+        console.log(vault_path)
+        let absolute_path = vault_path + '/' + relative_path
+
+        this.status.setText('🧑‍🚀: VC Copilot analyzing deck')
+        this.status.setAttr('title', 'Copilot is analyzing')
+
+        this.assistant_start_conv(absolute_path, editor)
+
+
+    }
+
+
+
+
+
+
+    //! OpenAI Assistant Methods
+    async assistant_replace_citations(openai: any, message: any){
+        let message_content = message.content[0].text
+        let annotations = message_content.annotations
+        let citations = []
+
+        for (let i = 0; i < annotations.length; i++) {
+            let annotation = annotations[i]
+
+            let annotation_text = annotation.text
+
+
+            message_content.value = await message_content.value.replace(annotation_text, `[${i+1}]`)
+
+            // Gather citations based on annotation attributes
+            if (annotation.file_citation) {
+                const cited_file =  await openai.files.retrieve(annotation.file_citation.file_id);
+                citations.push(`##### [${i+1}]\n ${annotation.file_citation.quote}\n **from ${cited_file.filename}**`); //
+            } else if (annotation.file_path) {
+                const cited_file = await openai.files.retrieve(annotation.file_path.file_id);
+                citations.push(`##### [${i+1}] Click <here> to download ${cited_file.filename}`);
+            }       
+
+        }
+            
+        message_content.value += '\n\n#### Sources:\n' + citations.join('\n\n')
+
+        return message
+
+
+    }
+
+    async assistant_displaymessage(openai: any, thread: any, run: any, messages: any, editor: Editor, editor_position: EditorPosition){
+
+        let message = messages.data[0]
+
+        message = await this.assistant_replace_citations(openai, message)
+
+        let final_message = message.content[0].text.value
+
+        //console.log()
+
+
+        this.displaymessage(final_message, editor, editor_position)
+        /*editor.replaceRange(final_message, editor.getCursor())
+        this.status.setText('🧑‍🚀: VC Copilot ready')
+        this.status.setAttr('title', 'Copilot is ready')*/
+
+
+
+
+        //todo here you could ask for the second message from the user if you would like
+
+
+
+    }
+
+    async assistant_check_thread_status(openai: any, thread: any, run: any, editor: Editor, editor_position: EditorPosition){
+        const run_status = await openai.beta.threads.runs.retrieve(
+            thread.id,
+            run.id
+        );
+
+        console.log(run_status.status)
+
+        
+        if(run_status.status == 'completed'){
+            console.log("successful!")
+            clearInterval(intervalId)
+            
+            const messages = await openai.beta.threads.messages.list(
+                thread.id
+            );
+
+            this.assistant_displaymessage(openai, thread, run, messages, editor, editor_position)
+
+
+        }
+
+    }
+
+    async assistant_start_conv(deck_path: string, editor: Editor){
+
+        let editor_position = editor.getCursor()
+
+        //const openai = new OpenAI({apiKey: openaiAPIKey, dangerouslyAllowBrowser: true})
+
+        //!OpenAI does not support electron yet, this is a work around (https://github.com/openai/openai-node/issues/284)
+        let deck = await toFile(fs.createReadStream(deck_path))
+
+        const file = await openai.files.create({
+            file: deck, //deck_path, 
+            purpose: "assistants",
+        });
+
+        const assistant = await openai.beta.assistants.create({
+            name: "Deck Master",
+            instructions: "You are a veteran venture capital investor. You are extremely analytical and detail-oriented. You always answer in nested bullet points. Always break down long bullet points into multiple short ones.",
+            tools: [{ type: "retrieval" }], //code_interpreter
+            model: "gpt-4-1106-preview",
+            file_ids: [file.id]
+        });
+
+
+        const thread = await openai.beta.threads.create();
+
+        //Add message to thread
+        const message = await openai.beta.threads.messages.create(
+            thread.id,
+            {
+            role: "user",
+            content: "Read through this pitch deck. Extract the following information:\n\
+- Team\n\
+- Problem the startup is solving\n\
+- Solution\n\
+- Competition\n\
+- Commercial Traction:\n\
+- Market size",
+            file_ids: [file.id]
+            }
+        );
+
+        //Run thread with the message
+        const run = await openai.beta.threads.runs.create(thread.id, {assistant_id: assistant.id})
+
+
+
+        intervalId = setInterval(() => this.assistant_check_thread_status(openai, thread, run, editor, editor_position), 500)
+
+    }
+
     
 
 }
@@ -1222,6 +1383,9 @@ class VCCopilotSettingsTab extends PluginSettingTab{
                 this.plugin.settings.owner_person_value = value;
                 await this.plugin.saveSettings();
             }));
+
+
+        
         new Setting(containerEl)
         .setName('Affinity: Connection Owner Field ID')
         .setDesc('Depending on the list you save fellow VCs in, there is a field that represent the \'connection owner with the fund\', enter the field id here')
