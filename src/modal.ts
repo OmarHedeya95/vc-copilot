@@ -18,13 +18,8 @@ export class TextInputModal extends Modal {
       if (this.type == 'market-research'){title = 'What industry do you want to research?'}
       if (this.type == 'defensibility'){title = 'Describe the startup whose defensibility is to be evaluated'}
       if (this.type == 'evaluate'){title = 'Describe the startup to be evaluated'}
+      if (this.type == 'url-research'){title = 'Enter url to investigate'}
       if (this.type == 'fireflies-summary') {title = 'Insert the name of the fireflies recording/meeting you would like to summarize'}
-      if (this.type == 'HackerNews Research') {
-        title = 'What topic would you like to research on Hackernews?'
-        let query = new Setting(contentEl).setName("Search Query").addText((text) => {})
-        let web = new Setting(contentEl).setName("Website to Search").addText((text) => {})
-        
-      }
       if(this.type == 'competition'){title = 'Describe the startup or industry for competition research'}
       contentEl.createEl('h2', { text: title });
 

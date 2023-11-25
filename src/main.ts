@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, Menu, MenuItem, MarkdownFileInfo, TFile, TAbstractFile, request} from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, Menu, MenuItem, MarkdownFileInfo, TFile, TAbstractFile, request, EditorPosition} from 'obsidian';
 const { Configuration, OpenAIApi } = require("openai");
 import {get_startup_by_name, add_notes_to_company, get_person_by_name, get_person_details, is_person_in_venture_network, get_field_values, add_entry_to_list, add_field_value, add_notes_to_person} from "./utils";
 import { MultipleTextInputModal, TextInputModal } from 'modal';
@@ -6,7 +6,6 @@ import { MultipleTextInputModal, TextInputModal } from 'modal';
 
 
 
-let you_api_key = ''
 let affinityAPIKey = ''
 let openaiAPIKey = ''
 let owner_value = '10'
@@ -23,7 +22,6 @@ interface ButlerSettings {
     venture_network_list_id: string;
     team_names: string;
     fireflies_api: string;
-    you_api: string
 
 }
 
@@ -33,7 +31,6 @@ const DEFAULT_SETTINGS: ButlerSettings = {
     owner_person_value: '10',
     connection_owner_field_id: '100',
     venture_network_list_id: '500',
-    you_api: '<You.com-API-Key>',
     team_names: 'Ben Horrowitz, Vinod Khosla',
     fireflies_api: 'default'
 
@@ -477,7 +474,7 @@ function countWords(str: string) {
     let words = str.match(/\b[a-z\d]+\b/gi);
     // return the length of the array or zero if no match
     return words ? words.length : 0;
-  }
+}
 
 async function summarize_paragraph(paragraph: string){
     const configuration = new Configuration({apiKey: openaiAPIKey})
@@ -611,7 +608,7 @@ export default class VCCopilotPlugin extends Plugin{
             id: 'url-research-command',
             name: 'Url Research',
             editorCallback: (editor: Editor) => {
-              const inputModal = new TextInputModal(this.app, 'Url Research',(input) => {
+              const inputModal = new TextInputModal(this.app, 'url-research',(input) => {
                 // Handle the submitted text here
                 console.log('Submitted text:', input);
                 this.url_research(input, editor);
@@ -696,7 +693,6 @@ export default class VCCopilotPlugin extends Plugin{
         owner_value = this.settings.owner_person_value
         connection_owner_field = this.settings.connection_owner_field_id
         venture_network_list = this.settings.venture_network_list_id
-        you_api_key = this.settings.you_api
         fireflies_api_key = this.settings.fireflies_api
         
         this.settings.team_names.split(',').forEach(element => {
@@ -711,7 +707,6 @@ export default class VCCopilotPlugin extends Plugin{
         owner_value = this.settings.owner_person_value
         connection_owner_field = this.settings.connection_owner_field_id
         venture_network_list = this.settings.venture_network_list_id
-        you_api_key = this.settings.you_api
         fireflies_api_key = this.settings.fireflies_api
         this.settings.team_names.split(',').forEach(element => {
             investor_names.push(element.trim())
@@ -919,6 +914,7 @@ The following aspects are extremely crucial to the investor:\n\
         this.status.setAttr('title', 'Copilot is researching the market...')
 
         let res;
+        let position = editor.getCursor()
 
         try{
 
@@ -961,7 +957,7 @@ The following aspects are extremely crucial to the investor:\n\
                 //message = message.replace(/### Market Research/gm, '')
                 message = '## Market Research\n' + message
 
-                this.displaymessage(message, editor)
+                this.displaymessage(message, editor, position)
 
 
                 
@@ -977,6 +973,8 @@ The following aspects are extremely crucial to the investor:\n\
     }
 
     async competition_research(query: string, editor: Editor){
+
+        let position = editor.getCursor()
 
 
         try{
@@ -994,7 +992,7 @@ The following aspects are extremely crucial to the investor:\n\
 
                 //message = message.replace(/### Competition Research/gm, '')
                 message = '## Competition Research\n' + message
-                this.displaymessage(message, editor)
+                this.displaymessage(message, editor, position)
 
 
                 
@@ -1011,8 +1009,8 @@ The following aspects are extremely crucial to the investor:\n\
 
     //Helper search methods
 
-    async displaymessage(message: string, editor: Editor){
-        editor.replaceRange(message, editor.getCursor())
+    async displaymessage(message: string, editor: Editor, position: EditorPosition){
+        editor.replaceRange(message, position)
         this.status.setText('🧑‍🚀: VC Copilot ready')
         this.status.setAttr('title', 'Copilot is ready')
 }
@@ -1140,8 +1138,9 @@ The following aspects are extremely crucial to the investor:\n\
 
     async custom_search(task: string, website: string, search_query: string, editor:Editor){
 
+        let position = editor.getCursor()
         let message = await this.specific_web_research(task, website, search_query, editor)
-        this.displaymessage(message, editor)
+        this.displaymessage(message, editor, position)
         
     }
 
@@ -1267,16 +1266,6 @@ class VCCopilotSettingsTab extends PluginSettingTab{
                     this.plugin.settings.fireflies_api = value;
                     await this.plugin.saveSettings();
                 }));         
-
-        new Setting(containerEl)
-            .setName('You.com API Key')
-            .setDesc('Enter the You.com API Key')
-            .addText(text => text
-                .setValue(this.plugin.settings.you_api)
-                .onChange(async (value) => {
-                    this.plugin.settings.you_api = value;
-                    await this.plugin.saveSettings();
-                })); 
 	}
 
 }
