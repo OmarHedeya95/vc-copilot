@@ -81,7 +81,7 @@ export class MultipleTextInputModal extends Modal {
 
     new Setting(contentEl).setName("Task to do").addDropdown((menu) => {
       menu.addOption("competition", "Find & Analyze competitors")
-      menu.addOption("market-research", "Market Research")
+      menu.addOption("market-research", "Investor Summary")
       menu.setValue("....")
       menu.onChange((value) => {this.task = value})
     })
