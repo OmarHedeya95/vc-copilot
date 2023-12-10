@@ -52,6 +52,7 @@ import {
 
 import { get_meeting_id, get_meeting_transcript_by_id } from "./fireflies";
 import { start } from "repl";
+import { match } from "assert";
 
 let affinityAPIKey = "";
 let openaiAPIKey = "";
@@ -63,8 +64,8 @@ let fireflies_api_key = "";
 let intervalId: any;
 let openai: OpenAI;
 
-const gpt_3_latest = "gpt-3.5-turbo-1106";
-const gpt_4_latest = "gpt-4-1106-preview";
+export const gpt_3_latest = "gpt-3.5-turbo-1106";
+export const gpt_4_latest = "gpt-4-1106-preview";
 
 interface ButlerSettings {
   affinityKey: string;
@@ -331,8 +332,8 @@ function getCursorRange(
   let startLineNumber;
   let matchedHeader;
   [startLineNumber, matchedHeader] = findLineNumber(fileText, startHeader, 0);
-  //console.log(`Matched Header: ${matchedHeader}`);
-  //console.log(`Found in line: ${startLineNumber}`);
+  console.log(`Matched Header: ${matchedHeader}`);
+  console.log(`Found in line: ${startLineNumber}`);
   let startCursorPosition: EditorPosition | null = null;
   let endCursorPosition: EditorPosition | null = null;
   if (startLineNumber) {
@@ -350,8 +351,8 @@ function getCursorRange(
         nextHeader,
         startLineNumber
       );
-      //console.log(`Matched Next Header: ${nextHeader}`);
-      //console.log(`Found in line: ${endLineNumber}`);
+      console.log(`Matched Next Header: ${nextHeader}`);
+      console.log(`Found in line: ${endLineNumber}`);
     }
 
     if (endLineNumber) {
@@ -361,15 +362,21 @@ function getCursorRange(
     }
   }
 
-  return [startCursorPosition, endCursorPosition];
+  return [startCursorPosition, endCursorPosition, matchedHeader];
 }
 
 async function update_affinity_startup(startup_name: string, note: string) {
-  let startup = await get_startup_by_name(
-    affinityAPIKey,
-    owner_value,
-    startup_name
-  );
+  let startup;
+  try {
+    let startup = await get_startup_by_name(
+      affinityAPIKey,
+      owner_value,
+      startup_name
+    );
+  } catch (e) {
+    new Notice(`Can not establish connection with Affinity`);
+    return;
+  }
 
   if (startup) {
     let response = await add_notes_to_company(startup, note, affinityAPIKey);
@@ -1206,13 +1213,14 @@ export default class VCCopilotPlugin extends Plugin {
         new Notice(
           `The active file does not have the usual startup file format`
         );
-        break;
+        continue;
       }
 
       let startCursorPosition;
       let endCursorPosition;
+      let matchedHeader;
 
-      [startCursorPosition, endCursorPosition] = getCursorRange(
+      [startCursorPosition, endCursorPosition, matchedHeader] = getCursorRange(
         fileText,
         startHeader,
         editor,
@@ -1223,6 +1231,9 @@ export default class VCCopilotPlugin extends Plugin {
         startCursorPosition,
         endCursorPosition
       );
+
+      originalText = matchedHeader + originalText;
+      console.log(`Text found in between: ${originalText}`);
 
       //add changes to the file
       if (activeFile) {
@@ -1237,9 +1248,11 @@ export default class VCCopilotPlugin extends Plugin {
       affinity_updates.push(update_text);
     }
 
-    let startup_name = activeFile.basename;
-    for (let affinity_update of affinity_updates) {
-      update_affinity_startup(startup_name, affinity_update);
+    if (affinityAPIKey != "" && affinityAPIKey != "default") {
+      let startup_name = activeFile.basename;
+      for (let affinity_update of affinity_updates) {
+        update_affinity_startup(startup_name, affinity_update);
+      }
     }
   }
 
@@ -1299,12 +1312,12 @@ export default class VCCopilotPlugin extends Plugin {
 - Commercial Traction: <describes the revenues of the startup>
 - Other: <does not fit into any of the above categories>
 
-For each sentence reply in the format of \`<sentence>::<category>\` Got it?`, //You are a helpful note-taking assistant for a venture capital investor. You will be given a part of a transcript for the call between the investor and the startup founder. You should focus only on information about the startup. Ignore any information about the investor themselves or the venture capital firm they represent. Your task is to extract information from the transcript covering the following sections:\n- Team: <Who is the team behind the startup>\n- Problem: <What is the problem the startup is solving>\n- Product: <How does their product solve this problem>\n- Traction: <How does their customer traction look like>\n- Competition: <How does the competitive landscape look like>\n- Round Info: <How much money are they raising from investors currently? How much have they raised before?>\n- Other: <Other important points about the founders OR the startup that do not fit in the above sections>\n\nFor every section always give your answers in bullet points! Otherwise say \"No Relevant Information\" infront of the section's name.\n\nTranscript:\n
+For each sentence reply in the format of \`sentence::category\` Got it?`, //You are a helpful note-taking assistant for a venture capital investor. You will be given a part of a transcript for the call between the investor and the startup founder. You should focus only on information about the startup. Ignore any information about the investor themselves or the venture capital firm they represent. Your task is to extract information from the transcript covering the following sections:\n- Team: <Who is the team behind the startup>\n- Problem: <What is the problem the startup is solving>\n- Product: <How does their product solve this problem>\n- Traction: <How does their customer traction look like>\n- Competition: <How does the competitive landscape look like>\n- Round Info: <How much money are they raising from investors currently? How much have they raised before?>\n- Other: <Other important points about the founders OR the startup that do not fit in the above sections>\n\nFor every section always give your answers in bullet points! Otherwise say \"No Relevant Information\" infront of the section's name.\n\nTranscript:\n
         },
         {
           role: "assistant",
           content:
-            "Yes, I understand. I am ready to analyze your sentences and choose the correct category. I will reply in the format of <sentence>::<category>",
+            "Yes, I understand. I am ready to analyze your sentences and choose the correct category. I will reply in the format of `sentence::category`",
         },
         {
           role: "user",
@@ -1458,7 +1471,7 @@ For each sentence reply in the format of \`<sentence>::<category>\` Got it?`, //
       instructions:
         "You are a veteran venture capital investor. You are extremely analytical and detail-oriented. You always answer in nested bullet points. Always break down long bullet points into multiple short ones.",
       tools: [{ type: "retrieval" }], //code_interpreter
-      model: "gpt-4-1106-preview",
+      model: gpt_3_latest,
       file_ids: [file.id],
     });
 
