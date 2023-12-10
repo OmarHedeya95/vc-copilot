@@ -294,7 +294,6 @@ function findLineNumber(
   const lines = fileContent.split("\n");
   for (let i = startLine; i < lines.length; i++) {
     if (lines[i].includes(searchString)) {
-      //todo make just i and the i-2 to i-1!
       return [i, lines[i]];
     }
   }
@@ -391,6 +390,23 @@ async function update_affinity_startup(startup_name: string, note: string) {
     new Notice(`Startup: ${startup_name} was NOT found on Affinity`);
     return false;
   }
+}
+
+function find_the_nearest_header(searchString: string, fileText: string) {
+  let lineOfString, fullSearchString;
+  [lineOfString, fullSearchString] = findLineNumber(fileText, searchString, 0);
+  const headerRegex = /^#+\s+.+$/gm;
+  const lines = fileText.split("\n");
+
+  for (let i = lineOfString; i >= 0; i--) {
+    let match: any;
+    if ((match = headerRegex.exec(lines[i])) != null) {
+      console.log(`Nearest header to: ${searchString} is ${match[0]}`);
+      return match[0];
+    }
+  }
+  console.log(`Can not find nearest string for: ${searchString}`);
+  return "";
 }
 
 export default class VCCopilotPlugin extends Plugin {
@@ -1206,8 +1222,13 @@ export default class VCCopilotPlugin extends Plugin {
     //For every key in the updates, add the updates to the right place
     for (const update_type in update_messages) {
       fileText = await this.app.vault.read(activeFile);
-      const update_text: string = update_messages[update_type];
+      let update_text: string = update_messages[update_type];
       startHeader = getStartHeader(update_type);
+
+      let note = notes.split("\n")[0];
+      let nearestHeader = find_the_nearest_header(note, fileText);
+      nearestHeader = nearestHeader.replace(/^[#\s]+/, "");
+      let source = "-- [[#" + nearestHeader + "]]";
 
       if (startHeader == "") {
         new Notice(
@@ -1234,6 +1255,8 @@ export default class VCCopilotPlugin extends Plugin {
 
       originalText = matchedHeader + originalText;
       console.log(`Text found in between: ${originalText}`);
+
+      update_text = update_text + source;
 
       //add changes to the file
       if (activeFile) {
@@ -1280,9 +1303,9 @@ export default class VCCopilotPlugin extends Plugin {
     const today = new Date();
     const currentDate = today.toISOString().split("T")[0];
     for (let [category, updates_array] of Object.entries(updates)) {
-      let message = `###### ${category} updates on ${currentDate}\n\n`;
+      let message = `###### ${category} updates on ${currentDate}\n`;
       for (let update of updates_array) {
-        message = message + update + "\n";
+        message = message + "- " + update + "\n";
       }
 
       update_messages[category] = message;
