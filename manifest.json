@@ -1,11 +1,11 @@
 {
-	"id": "vc-copilot",
-	"name": "VC Copilot",
-	"version": "2.1.0",
-	"minAppVersion": "0.15.0",
-	"description": "Supports venture capitalists with their daily work; summarization, syncing with CRM (Customer Relationship Management) tool, providing guidelines for due diligence, and testing defensibility of a startup",
-	"author": "Omar Hedeya",
-	"authorUrl": "omarhedeya.com",
-	"fundingUrl": "https://buymeacoffee.com/omarhedeya",
-	"isDesktopOnly": true
+  "id": "vc-copilot",
+  "name": "VC Copilot",
+  "version": "2.2.0",
+  "minAppVersion": "0.15.0",
+  "description": "Supports venture capitalists with their daily work; summarization, syncing with CRM (Customer Relationship Management) tool, providing guidelines for due diligence, and testing defensibility of a startup",
+  "author": "Omar Hedeya",
+  "authorUrl": "omarhedeya.com",
+  "fundingUrl": "https://buymeacoffee.com/omarhedeya",
+  "isDesktopOnly": true
 }
