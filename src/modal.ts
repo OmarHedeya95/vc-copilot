@@ -109,6 +109,62 @@ export class MultipleTextInputModal extends Modal {
   }
 }
 
+export class FindInvestorModal extends Modal {
+  input: string;
+  onsubmit: (input: string) => void;
+  company: string;
+  stage: string;
+  location: string;
+
+  constructor(app: App, onsubmit: (input: string) => void) {
+    super(app);
+    this.onsubmit = onsubmit;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    let title = "Describe the startup you want to find investors for";
+    contentEl.createEl("h2", { text: title });
+
+    let query = new Setting(contentEl)
+      .setName("Startup Description")
+      .addTextArea((text) =>
+        text.onChange((value) => {
+          this.company = value;
+        })
+      );
+    let web = new Setting(contentEl)
+      .setName("Stage")
+      .setDesc("e.g, Preseed, Seed, etc")
+      .addText((text) =>
+        text.onChange((value) => {
+          this.stage = value;
+        })
+      );
+
+    new Setting(contentEl)
+      .setName("Location")
+      .setDesc("insert the country where the startup is located")
+      .addText((text) =>
+        text.onChange((value) => {
+          this.location = value;
+        })
+      );
+
+    let button = new Setting(contentEl).addButton((btn) => {
+      btn
+        .setButtonText("Submit")
+        .setCta()
+        .onClick(() => {
+          this.close();
+          this.onsubmit(
+            this.company + ", " + this.stage + ", " + this.location
+          );
+        });
+    });
+  }
+}
+
 export class PDFModal extends FuzzySuggestModal<TFile> {
   onsubmit: (input: string) => void;
 
@@ -133,5 +189,76 @@ export class PDFModal extends FuzzySuggestModal<TFile> {
 
     //let x = fs.createReadStream(file.path)
     this.onsubmit(file.path);
+  }
+}
+
+export class TracxnModal extends Modal {
+  input: string;
+  onsubmit: (input: string) => void;
+  isIPO: boolean;
+  isAcquired: boolean;
+  company: string;
+  companies_per_request: string;
+
+  constructor(app: App, onsubmit: (input: string) => void) {
+    super(app);
+    this.onsubmit = onsubmit;
+    this.isIPO = false;
+    this.isAcquired = false;
+    this.companies_per_request = "3";
+  }
+  onOpen() {
+    const { contentEl } = this;
+    let title = "Competitor Overview through Tracxn";
+    contentEl.createEl("h2", { text: title });
+    contentEl.createEl("h5", {
+      text: "IPO and Acquisition are mutually exclusive",
+    });
+
+    let query = new Setting(contentEl).setName("Company Name").addText((text) =>
+      text.onChange((value) => {
+        this.company = value;
+      })
+    );
+
+    let ipo = new Setting(contentEl)
+      .setName("IPOed competitors?")
+      .addToggle((component) => {
+        component.onChange((value) => {
+          this.isIPO = value;
+        });
+      });
+
+    let acquired = new Setting(contentEl)
+      .setName("Acquired competitors?")
+      .addToggle((component) => {
+        component.onChange((value) => {
+          this.isAcquired = value;
+        });
+      });
+
+    new Setting(contentEl)
+      .setName("Number of companies per request")
+      .addText((text) =>
+        text.onChange((value) => (this.companies_per_request = value))
+      );
+
+    let button = new Setting(contentEl).addButton((btn) => {
+      btn
+        .setButtonText("Submit")
+        .setCta()
+        .onClick(() => {
+          this.close();
+          this.onsubmit(
+            this.company +
+              ", " +
+              this.isIPO +
+              ", " +
+              this.isAcquired +
+              ", " +
+              this.companies_per_request
+          );
+        });
+    });
   }
 }

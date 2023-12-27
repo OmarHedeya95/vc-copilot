@@ -33,9 +33,26 @@ import {
   is_summarizable,
   vc_ready_for_affinity,
   countWords,
+  extract_startup_details,
+  get_ipo_details,
+  get_acquisition_details,
+  formatObjectsToMarkdownTable,
+  get_relevant_feeds,
+  generate_investor_json,
+  find_eligible_investors,
+  format_matching_prompt,
+  extractInvestorsText,
+  extractResoningText,
+  extractTextToEndOfLine,
 } from "./utils";
 
-import { PDFModal, MultipleTextInputModal, TextInputModal } from "./modal";
+import {
+  PDFModal,
+  MultipleTextInputModal,
+  TextInputModal,
+  TracxnModal,
+  FindInvestorModal,
+} from "./modal";
 
 import OpenAI, { toFile } from "openai";
 
@@ -61,6 +78,7 @@ let connection_owner_field = "10";
 let venture_network_list = "500";
 let investor_names: string[] = [];
 let fireflies_api_key = "";
+let tracxn_api_key = "";
 let intervalId: any;
 let openai: OpenAI;
 
@@ -75,6 +93,7 @@ interface ButlerSettings {
   venture_network_list_id: string;
   team_names: string;
   fireflies_api: string;
+  tracxn_api: string;
 }
 
 const DEFAULT_SETTINGS: ButlerSettings = {
@@ -85,6 +104,7 @@ const DEFAULT_SETTINGS: ButlerSettings = {
   venture_network_list_id: "500",
   team_names: "Ben Horrowitz, Vinod Khosla",
   fireflies_api: "default",
+  tracxn_api: "default",
 };
 
 async function openai_js(
@@ -409,6 +429,53 @@ function find_the_nearest_header(searchString: string, fileText: string) {
   return "";
 }
 
+async function find_competitors_through_tracxn(
+  domain: string,
+  isPublic: boolean,
+  isAcquired: boolean,
+  companies_per_request: number
+) {
+  const requestUrl = "https://tracxn.com/api/2.2/companies";
+  const accessToken = tracxn_api_key; //"cc6b5778-067e-4d0e-827f-d1add3f8bc6e";
+
+  let results: any;
+  try {
+    let requestBody = {
+      filter: {
+        competitorOf: [domain],
+        isFunded: true,
+      },
+      size: companies_per_request,
+    };
+
+    if (isAcquired) {
+      requestBody["filter"]["companyStage"] = "Acquired";
+    } else if (isPublic) {
+      requestBody["filter"]["companyStage"] = "Public";
+    }
+
+    const response = await request({
+      url: requestUrl,
+      method: "POST",
+      headers: { "Content-Type": "application/json", accessToken: accessToken },
+      body: JSON.stringify(requestBody),
+    });
+
+    const result = await JSON.parse(response);
+    console.log(result);
+    results = result["result"];
+
+    /*for (let startup of results) {
+      let startup_details: any = extract_startup_details(startup);
+      relevant_startups.push(startup_details);
+    }*/
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+  return results;
+}
+
 export default class VCCopilotPlugin extends Plugin {
   settings: ButlerSettings;
   status: HTMLElement;
@@ -572,6 +639,51 @@ export default class VCCopilotPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "find-investors",
+      name: "Find Investors For A Startup",
+      editorCallback: (editor: Editor) => {
+        const inputModal = new FindInvestorModal(this.app, (input) => {
+          // Handle the submitted text here
+          let result = input.split(", ");
+          let company = result[0];
+          let stage = result[1];
+          let location = result[2];
+          console.log("Submitted text:", input);
+          this.find_investors_for_startup(company, stage, location, editor);
+        });
+        inputModal.open();
+      },
+    });
+
+    this.addCommand({
+      id: "tracxn-competitor-overview",
+      name: "Competitor Overview Through Tracxn",
+      editorCallback: (editor: Editor) => {
+        const inputModal = new TracxnModal(this.app, (input) => {
+          // Handle the submitted text here
+          let result = input.split(", ");
+          let company = result[0];
+          let isIPO = result[1].trim() == "true" ? true : false;
+          let isAcquired = result[2].trim() == "true" ? true : false;
+          let companies_per_request = parseInt(result[3].trim());
+          console.log("Submitted text:");
+          console.log(company);
+          console.log(isIPO);
+          console.log(isAcquired);
+          console.log(companies_per_request);
+          this.tracxn(
+            company,
+            isIPO,
+            isAcquired,
+            companies_per_request,
+            editor
+          );
+        });
+        inputModal.open();
+      },
+    });
+
+    this.addCommand({
       id: "fireflies-summary",
       name: "Fireflies Call Summary",
       editorCallback: (editor: Editor) => {
@@ -612,6 +724,7 @@ export default class VCCopilotPlugin extends Plugin {
     connection_owner_field = this.settings.connection_owner_field_id;
     venture_network_list = this.settings.venture_network_list_id;
     fireflies_api_key = this.settings.fireflies_api;
+    tracxn_api_key = this.settings.tracxn_api;
 
     this.settings.team_names.split(",").forEach((element) => {
       investor_names.push(element.trim());
@@ -625,9 +738,163 @@ export default class VCCopilotPlugin extends Plugin {
     connection_owner_field = this.settings.connection_owner_field_id;
     venture_network_list = this.settings.venture_network_list_id;
     fireflies_api_key = this.settings.fireflies_api;
+    tracxn_api_key = this.settings.tracxn_api;
     this.settings.team_names.split(",").forEach((element) => {
       investor_names.push(element.trim());
     });
+  }
+
+  async tracxn(
+    company: string,
+    isIPO: boolean,
+    isAcquired: boolean,
+    companies_per_request: number,
+    editor: Editor
+  ) {
+    let all_startups = await find_competitors_through_tracxn(
+      company,
+      isIPO,
+      isAcquired,
+      companies_per_request
+    );
+
+    const specialFormat = true;
+    let all_startups_details: any = [];
+    for (let startup of all_startups) {
+      let startup_details = extract_startup_details(startup);
+      let acquisition_details = {};
+      if (isIPO) {
+        acquisition_details = get_ipo_details(startup); //or get_acquisition_details
+      } else if (isAcquired) {
+        acquisition_details = get_acquisition_details(startup);
+      }
+      let mergedDetails = { ...startup_details, ...acquisition_details };
+      all_startups_details.push(mergedDetails);
+    }
+
+    let table = formatObjectsToMarkdownTable(
+      all_startups_details,
+      specialFormat
+    );
+
+    let relevant_feeds = get_relevant_feeds(all_startups);
+    let feed_text =
+      '##### Tracxn Feed of Competitors for Deeper dive\n> Notice that the "feed" is the first part in the path\n\n';
+    for (let [fullpath, link] of Object.entries(relevant_feeds)) {
+      feed_text += `- [${fullpath}](${link})\n`;
+    }
+
+    let header = `#### Tracxn Competitive Overview for ${company}\n`;
+    if (isIPO) {
+      header = `#### IPOed Competition for ${company}\n`;
+    } else if (isAcquired) {
+      header = `#### Acquired Competition for ${company}\n`;
+    }
+    let final_text = header + table + "\n\n" + feed_text;
+
+    let position = editor.getCursor();
+    this.displaymessage(final_text, editor, position);
+  }
+
+  async get_all_investors(): Promise<{ text: string; name: string }[]> {
+    let all_files = this.app.vault.getMarkdownFiles();
+    let connected_investors_files: { text: string; name: string }[] = [];
+    for (let file of all_files) {
+      let text = await this.app.vault.read(file);
+      if (text.includes("#network/connected") && text.includes("#Person/VC")) {
+        connected_investors_files.push({ text: text, name: file.basename });
+      }
+    }
+    return connected_investors_files;
+  }
+
+  async find_investors_for_startup(
+    company: string,
+    stage: string,
+    location: string,
+    editor: Editor
+  ) {
+    new Notice("Finding best investors...");
+    this.status.setText("🧑‍🚀: VC Copilot searching for best investors...");
+    this.status.setAttr("title", "Copilot is searching for best investors...");
+    let position = editor.getCursor();
+
+    let connected_investors = await this.get_all_investors();
+    let connected_investors_json: any = [];
+    for (let [i, connected_investor] of Object.entries(connected_investors)) {
+      let name = connected_investor["name"];
+      let text = connected_investor["text"];
+      connected_investors_json.push(generate_investor_json(name, text));
+    }
+
+    //find which investors are eligible from the list based on geo and stage focus
+    let fit_investors = find_eligible_investors(
+      connected_investors_json,
+      location,
+      stage
+    );
+
+    console.log(`We found ${fit_investors.length} suitable investors`);
+
+    let matching_prompt = format_matching_prompt(fit_investors, company);
+
+    console.log(
+      `Matching Prompt:\n${matching_prompt}\n\n--------------------------------\n\n`
+    );
+    let system_prompt =
+      "You are an expert matchmaker who always find the most suitable investors for a startup. You are very thorough in your analysis.";
+    let result = await openai_js(
+      gpt_4_latest,
+      matching_prompt,
+      system_prompt,
+      2048
+    );
+
+    console.log(
+      `AI Reply:\n${result}\n\n-----------------------------------------\n\n`
+    );
+
+    let investors_text = extractInvestorsText(result);
+    let reasoning_text = extractResoningText(result);
+    console.log(investors_text);
+    let investors_text_array = investors_text
+      .split(",")
+      .map((item) => item.trim());
+
+    let message = "#### Most suitable investors\n";
+    let investors_message = "";
+    for (let investor of investors_text_array) {
+      investors_message += "- " + "[[" + investor + "]]" + "\n";
+
+      let reason_for_investor = extractTextToEndOfLine(
+        reasoning_text,
+        investor
+      );
+      if (reason_for_investor?.at(0) == ":") {
+        reason_for_investor = reason_for_investor.replace(":", "");
+      }
+
+      reason_for_investor = reason_for_investor.trim();
+      investors_message += `\t- (${reason_for_investor})\n`;
+    }
+    message += investors_message;
+
+    let extra_text = "";
+    try {
+      message +=
+        "\n\n##### Generally suitable investors based on geo and stage\n";
+      for (let investor of fit_investors) {
+        extra_text += "- " + "[[" + investor["name"] + "]]" + "\n";
+      }
+    } catch (e) {
+      console.log("Error in extracting extra investors");
+    }
+    message += extra_text;
+    console.log(message);
+    message += `\n\n##### Full Reasoning\n${reasoning_text}`;
+
+    this.displaymessage(message, editor, position);
+    //return investors_text_array;
   }
 
   async summarize_selected_startup_text(
@@ -1638,6 +1905,18 @@ class VCCopilotSettingsTab extends PluginSettingTab {
           .setValue(this.plugin.settings.fireflies_api)
           .onChange(async (value) => {
             this.plugin.settings.fireflies_api = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Tracxn API Key")
+      .setDesc("Enter the Tracxn API Key")
+      .addText((text) =>
+        text
+          .setValue(this.plugin.settings.tracxn_api)
+          .onChange(async (value) => {
+            this.plugin.settings.tracxn_api = value;
             await this.plugin.saveSettings();
           })
       );
