@@ -70,6 +70,8 @@ import {
 import { get_meeting_id, get_meeting_transcript_by_id } from "./fireflies";
 import { start } from "repl";
 import { match } from "assert";
+import { isNativeError } from "util/types";
+import { create } from "domain";
 
 let affinityAPIKey = "";
 let openaiAPIKey = "";
@@ -112,23 +114,29 @@ async function openai_js(
   user_prompt: string,
   system_prompt: string,
   max_tokens: number = 256,
-  temperature: number = 0.3
+  temperature: number = 0.3,
+  isStreaming: boolean = false
 ) {
   const response = await openai.chat.completions.create({
     model: model_name, //gpt-4-1106-preview
     temperature: temperature,
     max_tokens: max_tokens,
+    stream: isStreaming,
     messages: [
       { role: "system", content: system_prompt },
       { role: "user", content: user_prompt },
     ],
   });
 
-  let summary = response.choices[0].message.content;
-  if (summary == null) {
-    summary = "";
+  if (!isStreaming) {
+    let summary = response.choices[0].message.content;
+    if (summary == null) {
+      summary = "";
+    }
+    return summary;
+  } else {
+    return response;
   }
-  return summary;
 }
 
 async function openai_js_multiturn(
@@ -148,7 +156,7 @@ async function openai_js_multiturn(
     console.log(messages);
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4-1106-preview",
+      model: gpt_4_latest,
       temperature: temperature,
       max_tokens: max_tokens,
       messages: messages,
@@ -1110,6 +1118,34 @@ export default class VCCopilotPlugin extends Plugin {
     this.displaymessage(final_text, editor, position);
   }
 
+  async insert_header(
+    headerNumber: number,
+    headerMessage: string,
+    editor: Editor
+  ) {
+    let header = "";
+    for (let i = 0; i < headerNumber; i++) {
+      header += "#";
+    }
+    header += " ";
+    header += headerMessage + "\n";
+    editor.replaceRange(header, editor.getCursor());
+    editor.setCursor(editor.getCursor()["line"] + 1, 0);
+  }
+
+  async insert_openai_streaming(response: any, editor: Editor) {
+    for await (let completion of response) {
+      let message = completion.choices[0]?.delta?.content || "";
+      editor.replaceRange(message, editor.getCursor());
+      editor.setCursor(
+        editor.getCursor()["line"],
+        editor.getCursor()["ch"] + message.length
+      );
+    }
+    this.status.setText("🧑‍🚀: VC Copilot ready");
+    this.status.setAttr("title", "Copilot is ready");
+  }
+
   async defensibility_analysis(startup_description: string, editor: Editor) {
     let position = editor.getCursor();
     let system_prompt: string = DEFENSIBILITY_ANALYSIS_SYSTEM_PROMPT;
@@ -1123,17 +1159,29 @@ export default class VCCopilotPlugin extends Plugin {
       "title",
       "VC Copilot is analyzing defensibility of the startup..."
     );
+
+    this.insert_header(2, "Defensibility Analysis", editor);
     let analysis = await openai_js(
       gpt_4_latest,
       query,
       system_prompt,
       1024,
-      1.0
+      1.0,
+      true
     );
 
-    analysis = "## Defensibility Analysis\n" + analysis;
+    await this.insert_openai_streaming(analysis, editor);
+  }
 
-    this.displaymessage(analysis, editor, position);
+  create_loading_interval(description: string) {
+    let counter = 0;
+    let loadingInterval = setInterval(() => {
+      let emojis = ["🌕", "🌖", "🌗", "🌘", "🌑", "🌒", "🌓", "🌔"];
+
+      new Notice(`🧑‍🚀 ${description} ${emojis[counter]}`, 1000);
+      counter = (counter + 1) % emojis.length;
+    }, 1500);
+    return loadingInterval;
   }
 
   async guidance_workflow(startup_description: string, editor: Editor) {
@@ -1156,21 +1204,31 @@ export default class VCCopilotPlugin extends Plugin {
 
     this.status.setText("🧑‍🚀: VC Copilot analyzing startup...");
     this.status.setAttr("title", "VC Copilot is analyzing the startup...");
-    let replies: string[] = await openai_js_multiturn(
+
+    let loadingInterval = this.create_loading_interval("Analyzing the startup");
+
+    let repliesPromise: Promise<string[]> = openai_js_multiturn(
       user_queries,
       system_prompt,
       1024,
       1.0
     );
 
-    replies[0] =
-      "## Analysis Workflow\n\n#### Core Problem\n\n" + replies[0] + "\n";
-    replies[1] = "#### Hypotheses\n\n" + replies[1] + "\n";
-    replies[2] = "#### Categories\n\n" + replies[2] + "\n";
-
-    let final_text = replies[0] + replies[1] + replies[2];
-
-    this.displaymessage(final_text, editor, position);
+    repliesPromise
+      .then((replies: string[]) => {
+        clearInterval(loadingInterval);
+        replies[0] =
+          "## Analysis Workflow\n\n#### Core Problem\n\n" + replies[0] + "\n";
+        replies[1] = "#### Hypotheses\n\n" + replies[1] + "\n";
+        replies[2] = "#### Categories\n\n" + replies[2] + "\n";
+        let final_text = replies[0] + replies[1] + replies[2];
+        this.displaymessage(final_text, editor, position);
+      })
+      .catch((error) => {
+        clearInterval(loadingInterval);
+        new Notice(`An error occurred. Check Console`, 500);
+        console.error(error);
+      });
   }
 
   async fireflies_summary(meeting_name: string, editor: Editor) {
@@ -1182,6 +1240,9 @@ export default class VCCopilotPlugin extends Plugin {
     let final_summary = "";
 
     let cursor_position = editor.getCursor();
+    let loadingInterval = this.create_loading_interval(
+      "Summarizing sections of the transcript"
+    );
 
     try {
       let id = await get_meeting_id(meeting_name, fireflies_api_key);
@@ -1220,6 +1281,10 @@ export default class VCCopilotPlugin extends Plugin {
         summaries.push(summary);
         //console.log(summary)
       }
+      clearInterval(loadingInterval);
+      loadingInterval = this.create_loading_interval(
+        "Summarizing full transcript"
+      );
       this.status.setText(
         `🧑‍🚀 🔎: VC Copilot summarizing the full transcript of ${meeting_name}...`
       );
@@ -1229,6 +1294,7 @@ export default class VCCopilotPlugin extends Plugin {
       );
 
       final_summary = await summarize_all_paragraphs_together(summaries);
+      clearInterval(loadingInterval);
       final_summary = final_summary.replace(/\*\*Team(:)?\*\*/g, "#### Team");
       final_summary = final_summary.replace(
         /\*\*Problem(:)?\*\*/g,
@@ -1270,6 +1336,7 @@ export default class VCCopilotPlugin extends Plugin {
         final_summary;
       //todo change the bold item with just subheaders similar to url research
     } catch (error) {
+      clearInterval(loadingInterval);
       console.log(`Error during fireflies summary: ${error}`);
       new Notice(`Error during fireflies summary`);
     }
@@ -1285,7 +1352,9 @@ export default class VCCopilotPlugin extends Plugin {
 
     let res;
     let position = editor.getCursor();
-
+    let loadingInterval = this.create_loading_interval(
+      `Researching the market`
+    );
     try {
       let websites = ["", "globenewswire.com", "statista.com"];
 
@@ -1311,9 +1380,10 @@ export default class VCCopilotPlugin extends Plugin {
       }
 
       message = "## Market Research\n" + message;
-
+      clearInterval(loadingInterval);
       this.displaymessage(message, editor, position);
     } catch (error) {
+      clearInterval(loadingInterval);
       console.log(`Error when doing market research: ${error}`);
       new Notice(`Error when doing market research`);
     }
@@ -1323,9 +1393,11 @@ export default class VCCopilotPlugin extends Plugin {
     let position = editor.getCursor();
     this.status.setText("🧑‍🚀 🔎: VC Copilot researching competition...");
     this.status.setAttr("title", "Copilot is researching competition...");
-
+    let loadingInterval = this.create_loading_interval(
+      `Researching competition`
+    );
     try {
-      let websites = ["techcrunch.com", "businessinsider.com"]; //, "news.ycombinator.com", "sifted.eu", "reddit.com"]
+      let websites = ["techcrunch.com", "businessinsider.com"]; //, "news.ycombinator.com", "sifted.eu", "reddit.com", "tech.eu"]
       //for (let website of websites)
       //{
 
@@ -1334,13 +1406,14 @@ export default class VCCopilotPlugin extends Plugin {
       );
       let results = await Promise.all(promises);
       let message = results.join("\n\n");
-
+      clearInterval(loadingInterval);
       //message = message.replace(/### Competition Research/gm, '')
       message = "## Competition Research\n" + message;
       this.displaymessage(message, editor, position);
 
       //}
     } catch (error) {
+      clearInterval(loadingInterval);
       console.log(`Error when doing market research: ${error}`);
       new Notice(`Error when doing market research`);
     }
@@ -1365,6 +1438,7 @@ export default class VCCopilotPlugin extends Plugin {
     this.status.setText("🧑‍🚀 🔎: VC Copilot surfing the internet...");
     this.status.setAttr("title", "Copilot is surfing...");
     let position = editor.getCursor();
+    let loadingInterval = this.create_loading_interval("Searching");
     let message = await specific_web_research(
       task,
       website,
@@ -1372,6 +1446,7 @@ export default class VCCopilotPlugin extends Plugin {
       openai,
       editor
     );
+    clearInterval(loadingInterval);
     this.displaymessage(message, editor, position);
   }
 

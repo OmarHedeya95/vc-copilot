@@ -215,11 +215,14 @@ export class TracxnModal extends Modal {
       text: "IPO and Acquisition are mutually exclusive",
     });
 
-    let query = new Setting(contentEl).setName("Company Name").addText((text) =>
-      text.onChange((value) => {
-        this.company = value;
-      })
-    );
+    let query = new Setting(contentEl)
+      .setName("Company Domain")
+      .setDesc("e.g: tracxn.com. Do not add http://")
+      .addText((text) =>
+        text.onChange((value) => {
+          this.company = value;
+        })
+      );
 
     let ipo = new Setting(contentEl)
       .setName("IPOed competitors?")
