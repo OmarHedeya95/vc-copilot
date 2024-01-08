@@ -52,6 +52,8 @@ import {
   TextInputModal,
   TracxnModal,
   FindInvestorModal,
+  FireFliesTemp,
+  SpokeModal,
 } from "./modal";
 
 import OpenAI, { toFile } from "openai";
@@ -67,7 +69,11 @@ import {
   GUIDANCE_WORKFLOW_SYSTEM_PROMPT,
 } from "./prompts";
 
-import { get_meeting_id, get_meeting_transcript_by_id } from "./fireflies";
+import {
+  get_meeting_id,
+  get_meeting_transcript_by_id,
+  transcript_json_to_array_string,
+} from "./fireflies";
 import { start } from "repl";
 import { match } from "assert";
 import { isNativeError } from "util/types";
@@ -244,7 +250,7 @@ async function summarize_paragraph(paragraph: string) {
       {
         role: "system",
         content:
-          'You are a helpful note-taking assistant for a venture capital investor. You will be given a part of a transcript for the call between the investor and the startup founder. Your task is to extract information covering the following aspects:\n- **Team**:<Who is the team behind the startup. Answer in bullet points!>\n- **Problem**:<What is the problem the startup is solving and for whom. Answer in bullet points!>\n- **Product**:<How does their product solve this problem. Answer in bullet points!>\n- **Traction**:<How does their customer traction look like. Answer in bullet points!>\n- **Competition**:<How does the competitive landscape look like. Answer in bullet points!>\n- **Round Info**:<How much money are they raising from investors currently? How much have they raised before? Answer in bullet points!>\n- **Other**: <Other important points about the founders OR the startup that do not fit in the above sections. Answer in bullet points!>\n\nFor every section, always give your answers in bullet points! Otherwise, say "No Relevant Information"',
+          'You are a helpful note-taking assistant for a venture capital investor. You will be given a part of a transcript for the call between the investor and the startup founders. Your task is to extract information covering the following aspects:\n- **Team**:<Who is the team behind the startup. Answer in bullet points!>\n- **Problem**:<What is the problem the startup is solving and for whom. Answer in bullet points!>\n- **Product**:<How does their product solve this problem. Answer in bullet points!>\n- **Traction**:<How does their customer traction look like. Answer in bullet points!>\n- **Competition**:<How does the competitive landscape look like. Answer in bullet points!>\n- **Round Info**:<How much money are they raising from investors currently? How much have they raised before? Answer in bullet points!>\n- **Other**: <Other important points about the founders OR the startup that do not fit in the above sections. Answer in bullet points!>\n\nFor every section, always give your answers in bullet points! Otherwise, say "No Relevant Information"',
       },
       {
         role: "user",
@@ -395,7 +401,7 @@ function getCursorRange(
 async function update_affinity_startup(startup_name: string, note: string) {
   let startup;
   try {
-    let startup = await get_startup_by_name(
+    startup = await get_startup_by_name(
       affinityAPIKey,
       owner_value,
       startup_name
@@ -708,10 +714,43 @@ export default class VCCopilotPlugin extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: "fireflies-summary-temp",
+      name: "Fireflies Text Summary (Temp)",
+      editorCallback: (editor: Editor) => {
+        const inputModal = new FireFliesTemp(this.app, (input) => {
+          // Handle the submitted text here
+          console.log("Submitted text:", input);
+          let result = input.split("&&& ");
+          let json_string = result[0];
+          let meeting_name = result[1];
+          this.fireflies_summary_temp(json_string, meeting_name, editor);
+        });
+        inputModal.open();
+      },
+    });
+
+    this.addCommand({
+      id: "summarise-spoke-meeting",
+      name: "Spoke Call Summary",
+      editorCallback: (editor: Editor) => {
+        const inputModal = new SpokeModal(this.app, (input) => {
+          // Handle the submitted text here
+          console.log("Submitted text:", input);
+          let result = input.split(", ");
+          let meeting_name = result[0];
+          let isDetailed = result[1].trim() == "true" ? true : false;
+          this.summarize_spoke_meeting(editor, meeting_name, isDetailed);
+        });
+        inputModal.open();
+      },
+    });
+
     openai = await new OpenAI({
       apiKey: openaiAPIKey,
       dangerouslyAllowBrowser: true,
     });
+
     this.status.setText("🧑‍🚀: VC Copilot loading....");
     this.status.setAttr("title", "VC Copilot is loading...");
 
@@ -851,11 +890,14 @@ export default class VCCopilotPlugin extends Plugin {
     );
     let system_prompt =
       "You are an expert matchmaker who always find the most suitable investors for a startup. You are very thorough in your analysis.";
+    let loadingInterval = this.create_loading_interval(
+      "Finding best investors"
+    );
     let result = await openai_js(
       gpt_4_latest,
       matching_prompt,
       system_prompt,
-      2048
+      4096
     );
 
     console.log(
@@ -902,6 +944,7 @@ export default class VCCopilotPlugin extends Plugin {
     message += `\n\n##### Full Reasoning\n${reasoning_text}`;
 
     this.displaymessage(message, editor, position);
+    clearInterval(loadingInterval);
     //return investors_text_array;
   }
 
@@ -1231,27 +1274,55 @@ export default class VCCopilotPlugin extends Plugin {
       });
   }
 
-  async fireflies_summary(meeting_name: string, editor: Editor) {
-    this.status.setText(
-      `🧑‍🚀 🔎: VC Copilot reading the transcript of ${meeting_name}...`
+  clean_final_summary(final_summary: string) {
+    final_summary = final_summary.replace(/\*\*Team(:)?\*\*/g, "#### Team");
+    final_summary = final_summary.replace(
+      /\*\*Problem(:)?\*\*/g,
+      "#### Problem"
     );
-    this.status.setAttr("title", "Copilot is reading the transcript");
+    final_summary = final_summary.replace(
+      /\*\*Product(:)?\*\*/g,
+      "#### Product"
+    );
+    final_summary = final_summary.replace(
+      /\*\*Traction(:)?\*\*/g,
+      "#### Traction"
+    );
+    final_summary = final_summary.replace(
+      /\*\*Competition(:)?\*\*/g,
+      "#### Competition"
+    );
+    final_summary = final_summary.replace(
+      /\*\*Round Info(:)?\*\*/g,
+      "#### Round Info"
+    );
+    final_summary = final_summary.replace(/\*\*Other(:)?\*\*/g, "#### Other");
+    final_summary = final_summary.replace("- #### Team", "#### Team");
+    final_summary = final_summary.replace("- #### Problem", "#### Problem");
+    final_summary = final_summary.replace("- #### Product", "#### Product");
+    final_summary = final_summary.replace("- #### Traction", "#### Traction");
+    final_summary = final_summary.replace(
+      "- #### Competition",
+      "#### Competition"
+    );
+    final_summary = final_summary.replace(
+      "- #### Round Info",
+      "#### Round Info"
+    );
+    final_summary = final_summary.replace("- #### Other", "#### Other");
+    return final_summary;
+  }
 
+  async summarize_transcript(paragraphs: string[], meeting_name: string) {
+    let summaries: string[] = [];
     let final_summary = "";
-
-    let cursor_position = editor.getCursor();
+    let long_paragraph = "";
+    let extended_paragraphs: string[] = [];
     let loadingInterval = this.create_loading_interval(
       "Summarizing sections of the transcript"
     );
 
     try {
-      let id = await get_meeting_id(meeting_name, fireflies_api_key);
-      let paragraphs = await get_meeting_transcript_by_id(id, investor_names);
-      let summaries: string[] = [];
-
-      let long_paragraph = "";
-      let extended_paragraphs: string[] = [];
-
       for (let paragraph of paragraphs) {
         let number_of_words = countWords(paragraph);
 
@@ -1295,41 +1366,8 @@ export default class VCCopilotPlugin extends Plugin {
 
       final_summary = await summarize_all_paragraphs_together(summaries);
       clearInterval(loadingInterval);
-      final_summary = final_summary.replace(/\*\*Team(:)?\*\*/g, "#### Team");
-      final_summary = final_summary.replace(
-        /\*\*Problem(:)?\*\*/g,
-        "#### Problem"
-      );
-      final_summary = final_summary.replace(
-        /\*\*Product(:)?\*\*/g,
-        "#### Product"
-      );
-      final_summary = final_summary.replace(
-        /\*\*Traction(:)?\*\*/g,
-        "#### Traction"
-      );
-      final_summary = final_summary.replace(
-        /\*\*Competition(:)?\*\*/g,
-        "#### Competition"
-      );
-      final_summary = final_summary.replace(
-        /\*\*Round Info(:)?\*\*/g,
-        "#### Round Info"
-      );
-      final_summary = final_summary.replace(/\*\*Other(:)?\*\*/g, "#### Other");
-      final_summary = final_summary.replace("- #### Team", "#### Team");
-      final_summary = final_summary.replace("- #### Problem", "#### Problem");
-      final_summary = final_summary.replace("- #### Product", "#### Product");
-      final_summary = final_summary.replace("- #### Traction", "#### Traction");
-      final_summary = final_summary.replace(
-        "- #### Competition",
-        "#### Competition"
-      );
-      final_summary = final_summary.replace(
-        "- #### Round Info",
-        "#### Round Info"
-      );
-      final_summary = final_summary.replace("- #### Other", "#### Other");
+      final_summary = this.clean_final_summary(final_summary);
+
       final_summary =
         `## ${meeting_name} call summary` +
         "\n#review_startup\n" +
@@ -1341,9 +1379,190 @@ export default class VCCopilotPlugin extends Plugin {
       new Notice(`Error during fireflies summary`);
     }
 
+    return final_summary;
+  }
+
+  async fireflies_summary(meeting_name: string, editor: Editor) {
+    this.status.setText(
+      `🧑‍🚀 🔎: VC Copilot reading the transcript of ${meeting_name}...`
+    );
+    this.status.setAttr("title", "Copilot is reading the transcript");
+
+    let final_summary = "";
+
+    let cursor_position = editor.getCursor();
+
+    let id = await get_meeting_id(meeting_name, fireflies_api_key);
+    let paragraphs = await get_meeting_transcript_by_id(
+      id,
+      investor_names,
+      fireflies_api_key
+    );
+
+    final_summary = await this.summarize_transcript(paragraphs, meeting_name);
+
     editor.replaceRange(final_summary, cursor_position);
     this.status.setText("🧑‍🚀: VC Copilot ready");
     this.status.setAttr("title", "Copilot is ready");
+  }
+
+  async fireflies_summary_temp(
+    transcript_json_string: string,
+    meeting_name: string,
+    editor: Editor
+  ) {
+    this.status.setText(
+      `🧑‍🚀 🔎: VC Copilot reading the transcript of ${meeting_name}...`
+    );
+    this.status.setAttr("title", "Copilot is reading the transcript");
+    let cursor_position = editor.getCursor();
+    let transcript = await transcript_json_to_array_string(
+      transcript_json_string,
+      investor_names
+    );
+    let final_summary = await this.summarize_transcript(
+      transcript,
+      meeting_name
+    );
+    editor.replaceRange(final_summary, cursor_position);
+    this.status.setText("🧑‍🚀: VC Copilot ready");
+    this.status.setAttr("title", "Copilot is ready");
+  }
+
+  async turn_paragraphs_into_chunks(paragraphs: string[]) {
+    let long_paragraph = "";
+    let extended_paragraphs: string[] = [];
+    for (let paragraph of paragraphs) {
+      let number_of_words = countWords(paragraph);
+      if (number_of_words + countWords(long_paragraph) <= 2500) {
+        //keep a paragraph below 1500 words (2000 tokens) for the context window
+        long_paragraph += paragraph + "\n\n";
+      } else {
+        extended_paragraphs.push(long_paragraph);
+        long_paragraph = paragraph;
+      }
+    }
+    if (long_paragraph.length != 0) {
+      extended_paragraphs.push(long_paragraph);
+    }
+    return extended_paragraphs;
+  }
+
+  async spoke_find_recording_id(meeting_name: string) {
+    let response = await request({
+      url: `https://api.spoke.app/projects/search?name=${meeting_name}&page=0&page_size=10&workspace_id=93424`,
+      method: "GET",
+      headers: {
+        Authorization:
+          "XnLd5LKbMbFm=sfmy7JZmpsTq0f-?cZIvq?3UOIhlkZIhi916vni2tkj1!Lapl/O/G2byTWHryxm4qRA54JLmwqwkjSn8p3szDtC/edurdW1=9iYecV!EwEpyb2=auPb!8Iw6?vHZxp?j!odL?=mJgybq9PGqwO5Y2rP?=0D?5T?7Wmn9u5/V1EKuzqTPsVFIxUEI!Jf-aAN3!SXdIDdpXFGbl2SaOUjb3EADoJWi5hQNI8I3frswrr=-6L-ozAluLINp0zH9?CrS20X?YZNKh6Hp=pvDCyesJL9CEXVTMJvAdrb5eP2-!mV7DyMS8YfMr5CBPtmDfgKJPDs5XWh!t5N-Zbf?oC5zoGusbwqfdSs36Ad!SlboJvbPEY2N94uVygMxybTmmdSdRO6qWO=!IO!n4aKLRcSOMhKeX8!lcWNxEgvtRPBnQFdQw3sJ-UKGsnuQ2K69tdQie4zNzMYrFcbUKkGrH5y3H/iqoeTsi5GHlxTBRTsECpxzSLCK5ij",
+      },
+    });
+
+    let result = JSON.parse(response);
+    return result["hits"][0]["document"]["id"];
+  }
+
+  async spoke_details(meeting_id: number) {
+    let response = await request({
+      url: `https://api.spoke.app/projects/complete/${meeting_id}`,
+      method: "GET",
+      headers: {
+        Authorization:
+          "XnLd5LKbMbFm=sfmy7JZmpsTq0f-?cZIvq?3UOIhlkZIhi916vni2tkj1!Lapl/O/G2byTWHryxm4qRA54JLmwqwkjSn8p3szDtC/edurdW1=9iYecV!EwEpyb2=auPb!8Iw6?vHZxp?j!odL?=mJgybq9PGqwO5Y2rP?=0D?5T?7Wmn9u5/V1EKuzqTPsVFIxUEI!Jf-aAN3!SXdIDdpXFGbl2SaOUjb3EADoJWi5hQNI8I3frswrr=-6L-ozAluLINp0zH9?CrS20X?YZNKh6Hp=pvDCyesJL9CEXVTMJvAdrb5eP2-!mV7DyMS8YfMr5CBPtmDfgKJPDs5XWh!t5N-Zbf?oC5zoGusbwqfdSs36Ad!SlboJvbPEY2N94uVygMxybTmmdSdRO6qWO=!IO!n4aKLRcSOMhKeX8!lcWNxEgvtRPBnQFdQw3sJ-UKGsnuQ2K69tdQie4zNzMYrFcbUKkGrH5y3H/iqoeTsi5GHlxTBRTsECpxzSLCK5ij",
+      },
+    });
+    // ``
+    let result = JSON.parse(response);
+    //console.log(result);
+    let meeting_name = result["name"];
+    let conversation = result["editors"];
+    let paragraphs: string[] = [];
+    for (let turn_to_speak of conversation) {
+      let transcripts = turn_to_speak["video"]["transcripts"];
+      let transcript = transcripts[0];
+      if (transcripts.length > 1) {
+        //! this will be weird if it happens
+        console.log(transcripts);
+      }
+      let speaker_name = transcript["speaker"];
+      if (investor_names.includes(speaker_name)) {
+        speaker_name += ` (Investor)`;
+      }
+      let words = transcript["original_words"];
+      if (words.length > 0) {
+        let sentence = "";
+        for (let word of words) {
+          sentence += word["text"] + " ";
+        }
+        let paragraph = speaker_name + ":\n" + sentence;
+        paragraphs.push(paragraph);
+      }
+    }
+    return paragraphs;
+  }
+
+  async summarize_spoke_meeting(
+    editor: Editor,
+    meeting_name: string,
+    isDetailed: boolean
+  ) {
+    let cursor_position = editor.getCursor();
+    let loadingInterval = this.create_loading_interval(
+      "Summarizing sections of the transcript"
+    );
+
+    try {
+      let meeting_id = await this.spoke_find_recording_id(meeting_name);
+      let paragraphs = await this.spoke_details(meeting_id);
+      let final_summary = "";
+      this.status.setText(
+        `🧑‍🚀 🔎: VC Copilot summarizing sections of the transcript of ${meeting_name}...`
+      );
+      this.status.setAttr(
+        "title",
+        "Copilot is summarizing sections of the transcript"
+      );
+
+      if (isDetailed) {
+        let summaries: string[] = [];
+        let conversation_chunks = await this.turn_paragraphs_into_chunks(
+          paragraphs
+        );
+        for (let conversation_chunk of conversation_chunks) {
+          let summary = await summarize_paragraph(conversation_chunk);
+          summaries.push(summary);
+        }
+        clearInterval(loadingInterval);
+        loadingInterval = this.create_loading_interval(
+          "Summarizing full transcript"
+        );
+        this.status.setText(
+          `🧑‍🚀 🔎: VC Copilot summarizing the full transcript of ${meeting_name}...`
+        );
+        this.status.setAttr(
+          "title",
+          "Copilot is summarizing the full transcript"
+        );
+        final_summary = await summarize_all_paragraphs_together(summaries);
+      } else {
+        let full_transcript = paragraphs.join("\n\n");
+        full_transcript = full_transcript.trim();
+        final_summary = await summarize_paragraph(full_transcript);
+      }
+      clearInterval(loadingInterval);
+      final_summary = this.clean_final_summary(final_summary);
+      final_summary =
+        `## ${meeting_name} call summary` +
+        "\n#review_startup\n" +
+        final_summary;
+      this.displaymessage(final_summary, editor, cursor_position);
+      this.status.setText("🧑‍🚀: VC Copilot ready");
+      this.status.setAttr("title", "Copilot is ready");
+    } catch (error) {
+      clearInterval(loadingInterval);
+      console.log(`Error during Spoke summary: ${error}`);
+      new Notice(`Error during Spoke summary`);
+    }
   }
 
   async market_research(industry: string, editor: Editor) {
@@ -1542,6 +1761,7 @@ export default class VCCopilotPlugin extends Plugin {
     let fileText;
     //Create update messages which include updates to each category
     let text_with_category = await this.categorize_notes(notes);
+    console.log(`Text with Category: ${text_with_category}`);
     let updates = this.get_updates_from_categories(text_with_category);
     let update_messages = this.create_update_messages(updates);
 
@@ -1596,7 +1816,7 @@ export default class VCCopilotPlugin extends Plugin {
       );
 
       originalText = matchedHeader + originalText;
-      console.log(`Text found in between: ${originalText}`);
+      //console.log(`Text found in between: ${originalText}`);
 
       update_text = update_text + source;
 
@@ -1658,7 +1878,7 @@ export default class VCCopilotPlugin extends Plugin {
 
   async categorize_notes(notes: string) {
     const response = await openai.chat.completions.create({
-      model: gpt_3_latest, //gpt-4 gpt-3.5-turbo, gpt-4-1106-preview
+      model: gpt_4_latest, //gpt-4 gpt-3.5-turbo, gpt-4-1106-preview
       messages: [
         {
           role: "system",
