@@ -54,6 +54,7 @@ import {
   FindInvestorModal,
   FireFliesTemp,
   SpokeModal,
+  WorkflowModal,
 } from "./modal";
 
 import OpenAI, { toFile } from "openai";
@@ -79,8 +80,15 @@ import { match } from "assert";
 import { isNativeError } from "util/types";
 import { create } from "domain";
 
+import { Groq } from "groq-sdk";
+//const groq = new Groq({
+//  apiKey: "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",
+//  dangerouslyAllowBrowser: true,
+//});
+
 let affinityAPIKey = "";
 let openaiAPIKey = "";
+let groqAPIKey = "";
 let owner_value = "10";
 let connection_owner_field = "10";
 let venture_network_list = "500";
@@ -89,13 +97,15 @@ let fireflies_api_key = "";
 let tracxn_api_key = "";
 let intervalId: any;
 let openai: OpenAI;
+let groq: Groq;
 
-export const gpt_3_latest = "gpt-3.5-turbo-1106";
-export const gpt_4_latest = "gpt-4-1106-preview";
+export const gpt_3_latest = "gpt-3.5-turbo";
+export const gpt_4_latest = "gpt-4-turbo";
 
 interface ButlerSettings {
   affinityKey: string;
   openAIKey: string;
+  groqAIKey: string;
   owner_person_value: string;
   connection_owner_field_id: string;
   venture_network_list_id: string;
@@ -107,6 +117,7 @@ interface ButlerSettings {
 const DEFAULT_SETTINGS: ButlerSettings = {
   affinityKey: "default",
   openAIKey: "default",
+  groqAIKey: "default",
   owner_person_value: "10",
   connection_owner_field_id: "100",
   venture_network_list_id: "500",
@@ -148,6 +159,7 @@ async function openai_js(
 async function openai_js_multiturn(
   queries: string[],
   system_prompt: string,
+  is_groq: boolean,
   max_tokens: number = 256,
   temperature: number = 0.3
 ) {
@@ -160,13 +172,21 @@ async function openai_js_multiturn(
   for (let query of queries) {
     messages.push({ role: "user", content: query });
     console.log(messages);
+    var response;
 
-    const response = await openai.chat.completions.create({
-      model: gpt_4_latest,
-      temperature: temperature,
-      max_tokens: max_tokens,
-      messages: messages,
-    });
+    if (!is_groq) {
+      response = await openai.chat.completions.create({
+        model: gpt_4_latest,
+        temperature: temperature,
+        max_tokens: max_tokens,
+        messages: messages,
+      });
+    } else {
+      response = await groq.chat.completions.create({
+        messages: messages,
+        model: "llama3-70b-8192",
+      });
+    }
 
     let assistant_reply = response.choices[0].message.content;
     if (assistant_reply == null) {
@@ -244,7 +264,8 @@ async function summarize_vc_text(text: string) {
 }
 
 async function summarize_paragraph(paragraph: string) {
-  const response = await openai.chat.completions.create({
+  var response;
+  response = await openai.chat.completions.create({
     model: "gpt-4-1106-preview", //gpt-4 gpt-3.5-turbo
     messages: [
       {
@@ -280,7 +301,8 @@ async function summarize_all_paragraphs_together(paragraphs: any[]) {
     input_text += paragraphs[i] + "\n\n";
   }
 
-  const response = await openai.chat.completions.create({
+  var response;
+  response = await openai.chat.completions.create({
     model: "gpt-4-1106-preview", // gpt-3.5-turbo
     messages: [
       {
@@ -563,10 +585,14 @@ export default class VCCopilotPlugin extends Plugin {
       id: "startup-workflow",
       name: "Startup Guidance Workflow",
       editorCallback: (editor: Editor) => {
-        const inputModal = new TextInputModal(this.app, "evaluate", (input) => {
+        const inputModal = new WorkflowModal(this.app, (input) => {
           // Handle the submitted text here
           console.log("Submitted text:", input);
-          this.guidance_workflow(input, editor);
+          let result = input.split("//-- ");
+          let desc = result[0];
+          let isGroq = result[1].trim() == "true" ? true : false;
+          console.log(`isGroq: ${isGroq}`);
+          this.guidance_workflow(desc, isGroq, editor);
         });
         inputModal.open();
       },
@@ -746,10 +772,16 @@ export default class VCCopilotPlugin extends Plugin {
       },
     });
 
-    openai = await new OpenAI({
+    openai = new OpenAI({
       apiKey: openaiAPIKey,
       dangerouslyAllowBrowser: true,
     });
+
+    groq = new Groq({
+      apiKey: groqAPIKey,
+      dangerouslyAllowBrowser: true,
+    });
+    console.log(`Groq API: ${groqAPIKey}`);
 
     this.status.setText("🧑‍🚀: VC Copilot loading....");
     this.status.setAttr("title", "VC Copilot is loading...");
@@ -766,6 +798,7 @@ export default class VCCopilotPlugin extends Plugin {
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     openaiAPIKey = this.settings.openAIKey;
+    groqAPIKey = this.settings.groqAIKey;
     affinityAPIKey = this.settings.affinityKey;
     owner_value = this.settings.owner_person_value;
     connection_owner_field = this.settings.connection_owner_field_id;
@@ -780,6 +813,7 @@ export default class VCCopilotPlugin extends Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
     openaiAPIKey = this.settings.openAIKey;
+    groqAPIKey = this.settings.groqAIKey;
     affinityAPIKey = this.settings.affinityKey;
     owner_value = this.settings.owner_person_value;
     connection_owner_field = this.settings.connection_owner_field_id;
@@ -1227,7 +1261,11 @@ export default class VCCopilotPlugin extends Plugin {
     return loadingInterval;
   }
 
-  async guidance_workflow(startup_description: string, editor: Editor) {
+  async guidance_workflow(
+    startup_description: string,
+    isGroq: boolean,
+    editor: Editor
+  ) {
     let position = editor.getCursor();
     let system_prompt = GUIDANCE_WORKFLOW_SYSTEM_PROMPT;
 
@@ -1253,6 +1291,7 @@ export default class VCCopilotPlugin extends Plugin {
     let repliesPromise: Promise<string[]> = openai_js_multiturn(
       user_queries,
       system_prompt,
+      isGroq,
       1024,
       1.0
     );
@@ -2117,6 +2156,18 @@ class VCCopilotSettingsTab extends PluginSettingTab {
           .setValue(this.plugin.settings.openAIKey)
           .onChange(async (value) => {
             this.plugin.settings.openAIKey = value;
+            await this.plugin.saveSettings();
+          })
+      );
+    new Setting(containerEl)
+      .setName("Groq API Key")
+      .setDesc("Your Groq API Key")
+      .addText((text) =>
+        text
+          .setPlaceholder("Enter key")
+          .setValue(this.plugin.settings.groqAIKey)
+          .onChange(async (value) => {
+            this.plugin.settings.groqAIKey = value;
             await this.plugin.saveSettings();
           })
       );
