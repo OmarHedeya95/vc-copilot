@@ -109,6 +109,130 @@ export class MultipleTextInputModal extends Modal {
   }
 }
 
+export class FireFliesTemp extends Modal {
+  input: string;
+  onsubmit: (input: string) => void;
+  json_string: string;
+  meeting_name: string;
+
+  constructor(app: App, onsubmit: (input: string) => void) {
+    super(app);
+    this.onsubmit = onsubmit;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    let title = "Give me the json string of transcript";
+    contentEl.createEl("h2", { text: title });
+
+    let query = new Setting(contentEl)
+      .setName("Json String")
+      .addTextArea((text) =>
+        text.onChange((value) => {
+          this.json_string = value;
+        })
+      );
+    let web = new Setting(contentEl).setName("Meeting name").addText((text) =>
+      text.onChange((value) => {
+        this.meeting_name = value;
+      })
+    );
+
+    let button = new Setting(contentEl).addButton((btn) => {
+      btn
+        .setButtonText("Submit")
+        .setCta()
+        .onClick(() => {
+          this.close();
+          this.onsubmit(this.json_string + "&&& " + this.meeting_name);
+        });
+    });
+  }
+}
+
+export class SpokeModal extends Modal {
+  input: string;
+  onsubmit: (input: string) => void;
+  meeting_name: string;
+  isDetailed: boolean;
+
+  constructor(app: App, onsubmit: (input: string) => void) {
+    super(app);
+    this.onsubmit = onsubmit;
+    this.isDetailed = false;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    let title = "Summarise the call recorded by Spoke.app";
+    contentEl.createEl("h2", { text: title });
+
+    new Setting(contentEl).setName("Meeting name").addText((text) =>
+      text.onChange((value) => {
+        this.meeting_name = value;
+      })
+    );
+
+    new Setting(contentEl)
+      .setName("Detailed Meeting")
+      .addToggle((component) => {
+        component.onChange((value) => {
+          this.isDetailed = value;
+        });
+      });
+
+    let button = new Setting(contentEl).addButton((btn) => {
+      btn
+        .setButtonText("Submit")
+        .setCta()
+        .onClick(() => {
+          this.close();
+          this.onsubmit(this.meeting_name + ", " + this.isDetailed);
+        });
+    });
+  }
+}
+
+export class WorkflowModal extends Modal {
+  desc: string;
+  onsubmit: (input: string) => void;
+  isGroq: boolean;
+
+  constructor(app: App, onsubmit: (input: string) => void) {
+    super(app);
+    this.onsubmit = onsubmit;
+    this.isGroq = false;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    let title =
+      "Describe the startup you want to analyze and if you want to use Groq";
+    contentEl.createEl("h2", { text: title });
+
+    new Setting(contentEl).setName("Startup Description").addTextArea((text) =>
+      text.onChange((value) => {
+        this.desc = value;
+      })
+    );
+    new Setting(contentEl).setName("Use Groq?").addToggle((component) => {
+      component.onChange((value) => {
+        this.isGroq = value;
+      });
+    });
+
+    let button = new Setting(contentEl).addButton((btn) => {
+      btn
+        .setButtonText("Submit")
+        .setCta()
+        .onClick(() => {
+          this.close();
+          this.onsubmit(this.desc + "//-- " + this.isGroq);
+        });
+    });
+  }
+}
+
 export class FindInvestorModal extends Modal {
   input: string;
   onsubmit: (input: string) => void;
