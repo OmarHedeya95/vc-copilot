@@ -81,10 +81,6 @@ import { isNativeError } from "util/types";
 import { create } from "domain";
 
 import { Groq } from "groq-sdk";
-//const groq = new Groq({
-//  apiKey: "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",
-//  dangerouslyAllowBrowser: true,
-//});
 
 let affinityAPIKey = "";
 let openaiAPIKey = "";
