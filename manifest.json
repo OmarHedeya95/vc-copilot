@@ -1,7 +1,7 @@
 {
   "id": "vc-copilot",
   "name": "VC Copilot",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "minAppVersion": "0.15.0",
   "description": "Supports venture capitalists with their daily work; summarization, syncing with CRM (Customer Relationship Management) tool, providing guidelines for due diligence, and testing defensibility of a startup",
   "author": "Omar Hedeya",

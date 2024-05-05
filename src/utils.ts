@@ -1,4 +1,5 @@
 import { request, Notice } from "obsidian";
+import OpenAI from "openai";
 
 let url_affinity_organizations = "https://api.affinity.co/organizations";
 let url_affinity_note = "https://api.affinity.co/notes";
@@ -753,7 +754,58 @@ function extractSpeciality(str) {
   return "";
 }
 
-function createInvestorObject(name, geographies, stages, industry, speciality) {
+export async function togetherai_js(
+  togetheraiAPIKey: string,
+  model_name: string,
+  user_prompt: string,
+  system_prompt: string,
+  max_tokens: number = 256,
+  temperature: number = 0.3,
+  messages: { role: string; content: string }[] = []
+) {
+  let togetherai = new OpenAI({
+    apiKey: togetheraiAPIKey,
+    dangerouslyAllowBrowser: true,
+    baseURL: "https://api.together.xyz/v1",
+  });
+
+  var response;
+  if (messages.length == 0) {
+    response = await togetherai.chat.completions.create({
+      model: model_name,
+      temperature: 0,
+      top_p: 0.0,
+      max_tokens: max_tokens,
+      messages: [
+        { role: "system", content: system_prompt },
+        { role: "user", content: user_prompt },
+      ],
+    });
+  } else {
+    response = await togetherai.chat.completions.create({
+      model: model_name,
+      temperature: 0,
+      top_p: 0.0,
+      max_tokens: max_tokens,
+      messages: messages,
+    });
+  }
+
+  let summary = response.choices[0].message.content;
+  if (summary == null) {
+    summary = "";
+  }
+
+  return summary;
+}
+
+export function createInvestorObject(
+  name,
+  geographies,
+  stages,
+  industry,
+  speciality
+) {
   const investorObject = {
     name: name,
     geo: geographies,

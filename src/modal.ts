@@ -155,6 +155,7 @@ export class SpokeModal extends Modal {
   onsubmit: (input: string) => void;
   meeting_name: string;
   isDetailed: boolean;
+  model: string;
 
   constructor(app: App, onsubmit: (input: string) => void) {
     super(app);
@@ -181,13 +182,24 @@ export class SpokeModal extends Modal {
         });
       });
 
+    new Setting(contentEl).setName("Model to use").addDropdown((menu) => {
+      menu.addOption("openai", "GPT-4-Turbo");
+      menu.addOption("meta-llama/Llama-3-8b-chat-hf", "Llama-3-70B");
+      menu.setValue("....");
+      menu.onChange((value) => {
+        this.model = value;
+      });
+    });
+
     let button = new Setting(contentEl).addButton((btn) => {
       btn
         .setButtonText("Submit")
         .setCta()
         .onClick(() => {
           this.close();
-          this.onsubmit(this.meeting_name + ", " + this.isDetailed);
+          this.onsubmit(
+            this.meeting_name + ", " + this.isDetailed + ", " + this.model
+          );
         });
     });
   }
@@ -196,12 +208,14 @@ export class SpokeModal extends Modal {
 export class WorkflowModal extends Modal {
   desc: string;
   onsubmit: (input: string) => void;
-  isGroq: boolean;
+  //isGroq: boolean;
+  model_name: string;
 
   constructor(app: App, onsubmit: (input: string) => void) {
     super(app);
     this.onsubmit = onsubmit;
-    this.isGroq = false;
+    //this.isGroq = false;
+    this.model_name = "";
   }
 
   onOpen() {
@@ -215,9 +229,19 @@ export class WorkflowModal extends Modal {
         this.desc = value;
       })
     );
-    new Setting(contentEl).setName("Use Groq?").addToggle((component) => {
+    /*new Setting(contentEl).setName("Use Groq?").addToggle((component) => {
       component.onChange((value) => {
         this.isGroq = value;
+      });
+    });*/
+
+    new Setting(contentEl).setName("Model to use").addDropdown((menu) => {
+      menu.addOption("openai", "GPT-4-Turbo");
+      menu.addOption("meta-llama/Llama-3-8b-chat-hf", "Llama-3-70B");
+      menu.addOption("groq", "Groq");
+      menu.setValue("....");
+      menu.onChange((value) => {
+        this.model_name = value;
       });
     });
 
@@ -227,7 +251,7 @@ export class WorkflowModal extends Modal {
         .setCta()
         .onClick(() => {
           this.close();
-          this.onsubmit(this.desc + "//-- " + this.isGroq);
+          this.onsubmit(this.desc + "//-- " + this.model_name);
         });
     });
   }
@@ -239,10 +263,12 @@ export class FindInvestorModal extends Modal {
   company: string;
   stage: string;
   location: string;
+  isFocused: boolean;
 
   constructor(app: App, onsubmit: (input: string) => void) {
     super(app);
     this.onsubmit = onsubmit;
+    this.isFocused = false;
   }
 
   onOpen() {
@@ -275,6 +301,14 @@ export class FindInvestorModal extends Modal {
         })
       );
 
+    new Setting(contentEl)
+      .setName("Do you want to focus the search on strong connections?")
+      .addToggle((component) => {
+        component.onChange((value) => {
+          this.isFocused = value;
+        });
+      });
+
     let button = new Setting(contentEl).addButton((btn) => {
       btn
         .setButtonText("Submit")
@@ -282,7 +316,13 @@ export class FindInvestorModal extends Modal {
         .onClick(() => {
           this.close();
           this.onsubmit(
-            this.company + ", " + this.stage + ", " + this.location
+            this.company +
+              ", " +
+              this.stage +
+              ", " +
+              this.location +
+              ", " +
+              this.isFocused
           );
         });
     });

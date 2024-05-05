@@ -17,6 +17,9 @@ import {
   FileSystemAdapter,
 } from "obsidian";
 
+import { MemoryVectorStore } from "langchain/vectorstores/memory";
+import { OpenAIEmbeddings } from "langchain/embeddings/openai";
+
 import {
   get_startup_by_name,
   add_notes_to_company,
@@ -44,6 +47,8 @@ import {
   extractInvestorsText,
   extractResoningText,
   extractTextToEndOfLine,
+  createInvestorObject,
+  togetherai_js,
 } from "./utils";
 
 import {
@@ -84,6 +89,7 @@ import { Groq } from "groq-sdk";
 
 let affinityAPIKey = "";
 let openaiAPIKey = "";
+let togetheraiAPIKey = "";
 let groqAPIKey = "";
 let owner_value = "10";
 let connection_owner_field = "10";
@@ -102,6 +108,7 @@ interface ButlerSettings {
   affinityKey: string;
   openAIKey: string;
   groqAIKey: string;
+  togetherAIKey: string;
   owner_person_value: string;
   connection_owner_field_id: string;
   venture_network_list_id: string;
@@ -113,6 +120,7 @@ interface ButlerSettings {
 const DEFAULT_SETTINGS: ButlerSettings = {
   affinityKey: "default",
   openAIKey: "default",
+  togetherAIKey: "default",
   groqAIKey: "default",
   owner_person_value: "10",
   connection_owner_field_id: "100",
@@ -155,7 +163,7 @@ async function openai_js(
 async function openai_js_multiturn(
   queries: string[],
   system_prompt: string,
-  is_groq: boolean,
+  model_name: string,
   max_tokens: number = 256,
   temperature: number = 0.3
 ) {
@@ -167,24 +175,39 @@ async function openai_js_multiturn(
 
   for (let query of queries) {
     messages.push({ role: "user", content: query });
-    console.log(messages);
     var response;
+    let assistant_reply = "";
 
-    if (!is_groq) {
-      response = await openai.chat.completions.create({
-        model: gpt_4_latest,
-        temperature: temperature,
-        max_tokens: max_tokens,
-        messages: messages,
-      });
-    } else {
+    if (model_name == "groq") {
       response = await groq.chat.completions.create({
         messages: messages,
         model: "llama3-70b-8192",
       });
+      assistant_reply = response.choices[0].message.content;
+    } else {
+      if (model_name == "openai") {
+        response = await openai.chat.completions.create({
+          model: gpt_4_latest,
+          temperature: temperature,
+          max_tokens: max_tokens,
+          messages: messages,
+        });
+        assistant_reply = response.choices[0].message.content;
+      } else {
+        response = await togetherai_js(
+          togetheraiAPIKey,
+          model_name,
+          "",
+          "",
+          1024,
+          0,
+          messages
+        );
+        assistant_reply = response;
+      }
     }
 
-    let assistant_reply = response.choices[0].message.content;
+    //let assistant_reply = response.choices[0].message.content;
     if (assistant_reply == null) {
       assistant_reply = "";
     }
@@ -259,29 +282,41 @@ async function summarize_vc_text(text: string) {
   }
 }
 
-async function summarize_paragraph(paragraph: string) {
-  var response;
-  response = await openai.chat.completions.create({
-    model: "gpt-4-1106-preview", //gpt-4 gpt-3.5-turbo
-    messages: [
-      {
-        role: "system",
-        content:
-          'You are a helpful note-taking assistant for a venture capital investor. You will be given a part of a transcript for the call between the investor and the startup founders. Your task is to extract information covering the following aspects:\n- **Team**:<Who is the team behind the startup. Answer in bullet points!>\n- **Problem**:<What is the problem the startup is solving and for whom. Answer in bullet points!>\n- **Product**:<How does their product solve this problem. Answer in bullet points!>\n- **Traction**:<How does their customer traction look like. Answer in bullet points!>\n- **Competition**:<How does the competitive landscape look like. Answer in bullet points!>\n- **Round Info**:<How much money are they raising from investors currently? How much have they raised before? Answer in bullet points!>\n- **Other**: <Other important points about the founders OR the startup that do not fit in the above sections. Answer in bullet points!>\n\nFor every section, always give your answers in bullet points! Otherwise, say "No Relevant Information"',
-      },
-      {
-        role: "user",
-        content: `${paragraph}`, //You are a helpful note-taking assistant for a venture capital investor. You will be given a part of a transcript for the call between the investor and the startup founder. You should focus only on information about the startup. Ignore any information about the investor themselves or the venture capital firm they represent. Your task is to extract information from the transcript covering the following sections:\n- Team: <Who is the team behind the startup>\n- Problem: <What is the problem the startup is solving>\n- Product: <How does their product solve this problem>\n- Traction: <How does their customer traction look like>\n- Competition: <How does the competitive landscape look like>\n- Round Info: <How much money are they raising from investors currently? How much have they raised before?>\n- Other: <Other important points about the founders OR the startup that do not fit in the above sections>\n\nFor every section always give your answers in bullet points! Otherwise say \"No Relevant Information\" infront of the section's name.\n\nTranscript:\n
-      },
-    ],
-    temperature: 0,
-    max_tokens: 1024,
-    top_p: 1,
-    frequency_penalty: 0,
-    presence_penalty: 0,
-  });
+async function summarize_paragraph(paragraph: string, model_name: string) {
+  let reply = "";
+  if (model_name == "openai") {
+    var response;
+    response = await openai.chat.completions.create({
+      model: gpt_4_latest, //"gpt-4-1106-preview", //gpt-4 gpt-3.5-turbo
+      messages: [
+        {
+          role: "system",
+          content:
+            'You are a helpful note-taking assistant for a venture capital investor. You will be given a part of a transcript for the call between the investor and the startup founders. Your task is to extract information covering the following aspects:\n- **Team**:<Who is the team behind the startup. Answer in bullet points!>\n- **Problem**:<What is the problem the startup is solving and for whom. Answer in bullet points!>\n- **Product**:<How does their product solve this problem. Answer in bullet points!>\n- **Traction**:<How does their customer traction look like. Answer in bullet points!>\n- **Competition**:<How does the competitive landscape look like. Answer in bullet points!>\n- **Round Info**:<How much money are they raising from investors currently? How much have they raised before? Answer in bullet points!>\n- **Other**: <Other important points about the founders OR the startup that do not fit in the above sections. Answer in bullet points!>\n\nFor every section, always give your answers in bullet points! Otherwise, say "No Relevant Information"',
+        },
+        {
+          role: "user",
+          content: `${paragraph}`, //You are a helpful note-taking assistant for a venture capital investor. You will be given a part of a transcript for the call between the investor and the startup founder. You should focus only on information about the startup. Ignore any information about the investor themselves or the venture capital firm they represent. Your task is to extract information from the transcript covering the following sections:\n- Team: <Who is the team behind the startup>\n- Problem: <What is the problem the startup is solving>\n- Product: <How does their product solve this problem>\n- Traction: <How does their customer traction look like>\n- Competition: <How does the competitive landscape look like>\n- Round Info: <How much money are they raising from investors currently? How much have they raised before?>\n- Other: <Other important points about the founders OR the startup that do not fit in the above sections>\n\nFor every section always give your answers in bullet points! Otherwise say \"No Relevant Information\" infront of the section's name.\n\nTranscript:\n
+        },
+      ],
+      temperature: 0,
+      max_tokens: 1024,
+      top_p: 1,
+      frequency_penalty: 0,
+      presence_penalty: 0,
+    });
+    reply = response.choices[0].message.content;
+  } else {
+    reply = await togetherai_js(
+      togetheraiAPIKey,
+      model_name, //meta-llama/Llama-3-8b-chat-hf
+      paragraph,
+      'You are a helpful note-taking assistant for a venture capital investor. You will be given a part of a transcript for the call between the investor and the startup founders. Your task is to extract information covering the following aspects:\n- **Team**:<Who is the team behind the startup. Answer in bullet points!>\n- **Problem**:<What is the problem the startup is solving and for whom. Answer in bullet points!>\n- **Product**:<How does their product solve this problem. Answer in bullet points!>\n- **Traction**:<How does their customer traction look like. Answer in bullet points!>\n- **Competition**:<How does the competitive landscape look like. Answer in bullet points!>\n- **Round Info**:<How much money are they raising from investors currently? How much have they raised before? Answer in bullet points!>\n- **Other**: <Other important points about the founders OR the startup that do not fit in the above sections. Answer in bullet points!>\n\nFor every section, always give your answers in bullet points! Otherwise, say "No Relevant Information"',
+      1024,
+      0
+    );
+  }
 
-  let reply = response.choices[0].message.content;
   console.log(reply);
   if (reply == null) {
     reply = "";
@@ -289,7 +324,10 @@ async function summarize_paragraph(paragraph: string) {
   return reply;
 }
 
-async function summarize_all_paragraphs_together(paragraphs: any[]) {
+async function summarize_all_paragraphs_together(
+  paragraphs: any[],
+  model_name: string
+) {
   let input_text = "";
 
   for (let i = 0; i < paragraphs.length; i++) {
@@ -297,28 +335,45 @@ async function summarize_all_paragraphs_together(paragraphs: any[]) {
     input_text += paragraphs[i] + "\n\n";
   }
 
-  var response;
-  response = await openai.chat.completions.create({
-    model: "gpt-4-1106-preview", // gpt-3.5-turbo
-    messages: [
-      {
-        role: "system",
-        content:
-          'You are a helpful assistant. Your task is to expand the first summary you are given by the information in all the subsequent summaries. The final summary you provide should cover ALL following sections:\n- **Team**: <Who is the team behind the startup>\n- **Problem**: <What is the problem the startup is solving and for whom>\n- **Product**: <How does their product solve this problem>\n- **Traction**: <How does their customer traction look like>\n- **Competition**: <How does the competitive landscape look like>\n- **Round Info**: <How much money are they raising from investors currently? How much have they raised before?>\n- **Other**: <Other important points about the founders OR the startup that do not fit in the above sections>\n\nDo not leave any empty sections. For every section always give your answers in bullet points! Otherwise say "No Relevant Information" infront of the section\'s name.',
-      },
-      {
-        role: "user",
-        content: `${input_text}`,
-      },
-    ],
-    temperature: 0,
-    max_tokens: 2048,
-    top_p: 1,
-    frequency_penalty: 0,
-    presence_penalty: 0,
-  });
+  console.log("All Summaries:");
+  console.log(input_text);
 
-  let reply = response.choices[0].message.content;
+  let system_prompt =
+    'You are a helpful assistant. Your task is to expand the first summary you are given by the information in all the subsequent summaries. The final summary you provide should cover ALL following sections:\n- **Team**: <Who is the team behind the startup>\n- **Problem**: <What is the problem the startup is solving and for whom>\n- **Product**: <How does their product solve this problem>\n- **Traction**: <How does their customer traction look like>\n- **Competition**: <How does the competitive landscape look like>\n- **Round Info**: <How much money are they raising from investors currently? How much have they raised before?>\n- **Other**: <Other important points about the founders OR the startup that do not fit in the above sections>\n\nDo not leave any empty sections. For every section always give your answers in bullet points! Otherwise say "No Relevant Information" infront of the section\'s name.';
+
+  let reply = "";
+  if (model_name == "openai") {
+    var response;
+    response = await openai.chat.completions.create({
+      model: gpt_4_latest, //"gpt-4-1106-preview", // gpt-3.5-turbo
+      messages: [
+        {
+          role: "system",
+          content: system_prompt,
+        },
+        {
+          role: "user",
+          content: `${input_text}`,
+        },
+      ],
+      temperature: 0,
+      max_tokens: 2048,
+      top_p: 1,
+      frequency_penalty: 0,
+      presence_penalty: 0,
+    });
+    reply = response.choices[0].message.content;
+  } else {
+    reply = await togetherai_js(
+      togetheraiAPIKey,
+      model_name,
+      input_text,
+      system_prompt,
+      1024,
+      0
+    );
+  }
+
   if (reply == null) {
     reply = "";
   }
@@ -564,15 +619,14 @@ export default class VCCopilotPlugin extends Plugin {
       id: "startup-defensibility",
       name: "Evaluate Startup Defensibility",
       editorCallback: (editor: Editor) => {
-        const inputModal = new TextInputModal(
-          this.app,
-          "defensibility",
-          (input) => {
-            // Handle the submitted text here
-            console.log("Submitted text:", input);
-            this.defensibility_analysis(input, editor);
-          }
-        );
+        const inputModal = new WorkflowModal(this.app, (input) => {
+          // Handle the submitted text here
+          console.log("Submitted text:", input);
+          let result = input.split("//-- ");
+          let desc = result[0];
+          let model_name = result[1].trim();
+          this.defensibility_analysis(input, model_name, editor);
+        });
         inputModal.open();
       },
     });
@@ -586,9 +640,8 @@ export default class VCCopilotPlugin extends Plugin {
           console.log("Submitted text:", input);
           let result = input.split("//-- ");
           let desc = result[0];
-          let isGroq = result[1].trim() == "true" ? true : false;
-          console.log(`isGroq: ${isGroq}`);
-          this.guidance_workflow(desc, isGroq, editor);
+          let model_name = result[1].trim();
+          this.guidance_workflow(desc, model_name, editor);
         });
         inputModal.open();
       },
@@ -684,8 +737,15 @@ export default class VCCopilotPlugin extends Plugin {
           let company = result[0];
           let stage = result[1];
           let location = result[2];
+          let isFocused = result[3].trim() == "true" ? true : false;
           console.log("Submitted text:", input);
-          this.find_investors_for_startup(company, stage, location, editor);
+          this.find_investors_for_startup(
+            company,
+            stage,
+            location,
+            isFocused,
+            editor
+          );
         });
         inputModal.open();
       },
@@ -762,7 +822,13 @@ export default class VCCopilotPlugin extends Plugin {
           let result = input.split(", ");
           let meeting_name = result[0];
           let isDetailed = result[1].trim() == "true" ? true : false;
-          this.summarize_spoke_meeting(editor, meeting_name, isDetailed);
+          let model_name = result[2].trim();
+          this.summarize_spoke_meeting(
+            editor,
+            meeting_name,
+            isDetailed,
+            model_name
+          );
         });
         inputModal.open();
       },
@@ -794,6 +860,7 @@ export default class VCCopilotPlugin extends Plugin {
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     openaiAPIKey = this.settings.openAIKey;
+    togetheraiAPIKey = this.settings.togetherAIKey;
     groqAPIKey = this.settings.groqAIKey;
     affinityAPIKey = this.settings.affinityKey;
     owner_value = this.settings.owner_person_value;
@@ -809,6 +876,7 @@ export default class VCCopilotPlugin extends Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
     openaiAPIKey = this.settings.openAIKey;
+    togetheraiAPIKey = this.settings.togetherAIKey;
     groqAPIKey = this.settings.groqAIKey;
     affinityAPIKey = this.settings.affinityKey;
     owner_value = this.settings.owner_person_value;
@@ -873,22 +941,85 @@ export default class VCCopilotPlugin extends Plugin {
     this.displaymessage(final_text, editor, position);
   }
 
-  async get_all_investors(): Promise<{ text: string; name: string }[]> {
+  async get_all_investors(
+    isFocused: boolean
+  ): Promise<{ text: string; name: string }[]> {
     let all_files = this.app.vault.getMarkdownFiles();
     let connected_investors_files: { text: string; name: string }[] = [];
     for (let file of all_files) {
       let text = await this.app.vault.read(file);
-      if (text.includes("#network/connected") && text.includes("#Person/VC")) {
-        connected_investors_files.push({ text: text, name: file.basename });
+
+      if (isFocused) {
+        if (
+          (text.includes("#network/strong") ||
+            text.includes("#testRelation") ||
+            text.includes("#network/favourite")) &&
+          text.includes("#network/connected") &&
+          text.includes("#Person/VC")
+        ) {
+          connected_investors_files.push({ text: text, name: file.basename });
+        }
+      } else {
+        if (
+          text.includes("#network/connected") &&
+          text.includes("#Person/VC")
+        ) {
+          connected_investors_files.push({ text: text, name: file.basename });
+        }
       }
     }
     return connected_investors_files;
+  }
+
+  async localDB(text_to_embed: string[], metadata: string[]) {
+    process.env.OPENAI_API_KEY = openaiAPIKey;
+    const vectorStore = await MemoryVectorStore.fromTexts(
+      text_to_embed,
+      metadata,
+      new OpenAIEmbeddings()
+    );
+
+    return vectorStore;
+  }
+
+  async get_most_relevant_investor_from_memory(
+    invDB: MemoryVectorStore,
+    cleaned_chunk: string
+  ) {
+    const closestInvestors = await invDB.similaritySearch(cleaned_chunk, 20);
+
+    let fit_investors_list: any[] = [];
+    closestInvestors.forEach((doc) => {
+      const investmentFocusStart = "Investment Focus:";
+      const specialEnd = "Special Info:";
+
+      const investor_desc = doc["pageContent"];
+      const startIndex =
+        investor_desc.indexOf(investmentFocusStart) +
+        investmentFocusStart.length;
+      const endIndex = investor_desc.indexOf(specialEnd);
+
+      const investmentFocus = investor_desc.substring(startIndex, endIndex);
+      const specialInfo = investor_desc.substring(endIndex + specialEnd.length);
+
+      fit_investors_list.push(
+        createInvestorObject(
+          doc["metadata"],
+          "",
+          "",
+          investmentFocus.trim(),
+          specialInfo.trim()
+        )
+      );
+    });
+    return fit_investors_list;
   }
 
   async find_investors_for_startup(
     company: string,
     stage: string,
     location: string,
+    isFocused: boolean,
     editor: Editor
   ) {
     new Notice("Finding best investors...");
@@ -896,7 +1027,7 @@ export default class VCCopilotPlugin extends Plugin {
     this.status.setAttr("title", "Copilot is searching for best investors...");
     let position = editor.getCursor();
 
-    let connected_investors = await this.get_all_investors();
+    let connected_investors = await this.get_all_investors(isFocused);
     let connected_investors_json: any = [];
     for (let [i, connected_investor] of Object.entries(connected_investors)) {
       let name = connected_investor["name"];
@@ -913,49 +1044,39 @@ export default class VCCopilotPlugin extends Plugin {
 
     console.log(`We found ${fit_investors.length} suitable investors`);
 
-    let matching_prompt = format_matching_prompt(fit_investors, company);
-
-    console.log(
-      `Matching Prompt:\n${matching_prompt}\n\n--------------------------------\n\n`
+    //index investors
+    let investors_index: string[] = [];
+    let investor_names: string[] = [];
+    for (let [i, investor] of Object.entries(fit_investors)) {
+      let investor_name = investor["name"];
+      let industry = investor["industry"];
+      let speciality = investor["speciality"];
+      investors_index.push(
+        `Investment Focus: ${industry}\nSpecial Info: ${speciality}`
+      );
+      investor_names.push(`${investor["name"]}`);
+    }
+    let invest_description_index = await this.localDB(
+      investors_index,
+      investor_names
     );
-    let system_prompt =
-      "You are an expert matchmaker who always find the most suitable investors for a startup. You are very thorough in your analysis.";
+
+    let best_fit_investor = await this.get_most_relevant_investor_from_memory(
+      invest_description_index,
+      company
+    );
+
+    console.log(best_fit_investor);
     let loadingInterval = this.create_loading_interval(
       "Finding best investors"
     );
-    let result = await openai_js(
-      gpt_4_latest,
-      matching_prompt,
-      system_prompt,
-      4096
-    );
-
-    console.log(
-      `AI Reply:\n${result}\n\n-----------------------------------------\n\n`
-    );
-
-    let investors_text = extractInvestorsText(result);
-    let reasoning_text = extractResoningText(result);
-    console.log(investors_text);
-    let investors_text_array = investors_text
-      .split(",")
-      .map((item) => item.trim());
 
     let message = "#### Most suitable investors\n";
     let investors_message = "";
-    for (let investor of investors_text_array) {
-      investors_message += "- " + "[[" + investor + "]]" + "\n";
+    for (let investor of best_fit_investor) {
+      investors_message += "- " + "[[" + investor["name"] + "]]" + "\n";
 
-      let reason_for_investor = extractTextToEndOfLine(
-        reasoning_text,
-        investor
-      );
-      if (reason_for_investor?.at(0) == ":") {
-        reason_for_investor = reason_for_investor.replace(":", "");
-      }
-
-      reason_for_investor = reason_for_investor.trim();
-      investors_message += `\t- (${reason_for_investor})\n`;
+      investors_message += `\t- Industry: ${investor["industry"]}\n\t- Special: ${investor["speciality"]}\n\n`;
     }
     message += investors_message;
 
@@ -971,11 +1092,9 @@ export default class VCCopilotPlugin extends Plugin {
     }
     message += extra_text;
     console.log(message);
-    message += `\n\n##### Full Reasoning\n${reasoning_text}`;
 
     this.displaymessage(message, editor, position);
     clearInterval(loadingInterval);
-    //return investors_text_array;
   }
 
   async summarize_selected_startup_text(
@@ -1219,7 +1338,11 @@ export default class VCCopilotPlugin extends Plugin {
     this.status.setAttr("title", "Copilot is ready");
   }
 
-  async defensibility_analysis(startup_description: string, editor: Editor) {
+  async defensibility_analysis(
+    startup_description: string,
+    model_name: string,
+    editor: Editor
+  ) {
     let position = editor.getCursor();
     let system_prompt: string = DEFENSIBILITY_ANALYSIS_SYSTEM_PROMPT;
     let query =
@@ -1234,16 +1357,35 @@ export default class VCCopilotPlugin extends Plugin {
     );
 
     this.insert_header(2, "Defensibility Analysis", editor);
-    let analysis = await openai_js(
-      gpt_4_latest,
-      query,
-      system_prompt,
-      1024,
-      1.0,
-      true
-    );
 
-    await this.insert_openai_streaming(analysis, editor);
+    if (model_name == "openai") {
+      let analysis = await openai_js(
+        gpt_4_latest,
+        query,
+        system_prompt,
+        1024,
+        1.0,
+        true
+      );
+
+      await this.insert_openai_streaming(analysis, editor);
+    } else {
+      if (model_name == "groq") {
+        new Notice(
+          `Groq is not supported for this task yet. We defaulted to Llama-3`
+        );
+        model_name = "meta-llama/Llama-3-8b-chat-hf";
+      }
+      let message = await togetherai_js(
+        togetheraiAPIKey,
+        model_name,
+        query,
+        system_prompt,
+        1024,
+        1.0
+      );
+      this.displaymessage(message, editor, position);
+    }
   }
 
   create_loading_interval(description: string) {
@@ -1259,7 +1401,7 @@ export default class VCCopilotPlugin extends Plugin {
 
   async guidance_workflow(
     startup_description: string,
-    isGroq: boolean,
+    model_name: string,
     editor: Editor
   ) {
     let position = editor.getCursor();
@@ -1287,7 +1429,7 @@ export default class VCCopilotPlugin extends Plugin {
     let repliesPromise: Promise<string[]> = openai_js_multiturn(
       user_queries,
       system_prompt,
-      isGroq,
+      model_name,
       1024,
       1.0
     );
@@ -1383,7 +1525,7 @@ export default class VCCopilotPlugin extends Plugin {
         "Copilot is summarizing sections of the transcript"
       );
       for (let paragraph of extended_paragraphs) {
-        let summary = await summarize_paragraph(paragraph);
+        let summary = await summarize_paragraph(paragraph, "openai");
         summaries.push(summary);
         //console.log(summary)
       }
@@ -1399,7 +1541,10 @@ export default class VCCopilotPlugin extends Plugin {
         "Copilot is summarizing the full transcript"
       );
 
-      final_summary = await summarize_all_paragraphs_together(summaries);
+      final_summary = await summarize_all_paragraphs_together(
+        summaries,
+        "openai"
+      );
       clearInterval(loadingInterval);
       final_summary = this.clean_final_summary(final_summary);
 
@@ -1494,6 +1639,7 @@ export default class VCCopilotPlugin extends Plugin {
     });
 
     let result = JSON.parse(response);
+    console.log(`${result["hits"][0]["document"]["id"]}`);
     return result["hits"][0]["document"]["id"];
   }
 
@@ -1511,6 +1657,8 @@ export default class VCCopilotPlugin extends Plugin {
     //console.log(result);
     let meeting_name = result["name"];
     let conversation = result["editors"];
+    console.log(`Meeting name: ${meeting_name}`);
+    console.log(result);
     let paragraphs: string[] = [];
     for (let turn_to_speak of conversation) {
       let transcripts = turn_to_speak["video"]["transcripts"];
@@ -1523,7 +1671,7 @@ export default class VCCopilotPlugin extends Plugin {
       if (investor_names.includes(speaker_name)) {
         speaker_name += ` (Investor)`;
       }
-      let words = transcript["original_words"];
+      let words = transcript["words"];
       if (words.length > 0) {
         let sentence = "";
         for (let word of words) {
@@ -1539,7 +1687,8 @@ export default class VCCopilotPlugin extends Plugin {
   async summarize_spoke_meeting(
     editor: Editor,
     meeting_name: string,
-    isDetailed: boolean
+    isDetailed: boolean,
+    model_name: string
   ) {
     let cursor_position = editor.getCursor();
     let loadingInterval = this.create_loading_interval(
@@ -1564,7 +1713,10 @@ export default class VCCopilotPlugin extends Plugin {
           paragraphs
         );
         for (let conversation_chunk of conversation_chunks) {
-          let summary = await summarize_paragraph(conversation_chunk);
+          let summary = await summarize_paragraph(
+            conversation_chunk,
+            model_name
+          );
           summaries.push(summary);
         }
         clearInterval(loadingInterval);
@@ -1578,7 +1730,10 @@ export default class VCCopilotPlugin extends Plugin {
           "title",
           "Copilot is summarizing the full transcript"
         );
-        final_summary = await summarize_all_paragraphs_together(summaries);
+        final_summary = await summarize_all_paragraphs_together(
+          summaries,
+          model_name
+        );
       } else {
         let full_transcript = paragraphs.join("\n\n");
         full_transcript = full_transcript.trim();
@@ -2076,8 +2231,6 @@ For each sentence reply in the format of \`sentence::category\` Got it?`, //You 
   async assistant_start_conv(deck_path: string, editor: Editor) {
     let editor_position = editor.getCursor();
 
-    //const openai = new OpenAI({apiKey: openaiAPIKey, dangerouslyAllowBrowser: true})
-
     //!OpenAI does not support electron yet, this is a work around (https://github.com/openai/openai-node/issues/284)
     let deck = await toFile(fs.createReadStream(deck_path));
 
@@ -2152,6 +2305,19 @@ class VCCopilotSettingsTab extends PluginSettingTab {
           .setValue(this.plugin.settings.openAIKey)
           .onChange(async (value) => {
             this.plugin.settings.openAIKey = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("TogetherAI API Key")
+      .setDesc("Your TogetherAI API Key -- to use non-OpenAI Models")
+      .addText((text) =>
+        text
+          .setPlaceholder("Enter key")
+          .setValue(this.plugin.settings.togetherAIKey)
+          .onChange(async (value) => {
+            this.plugin.settings.togetherAIKey = value;
             await this.plugin.saveSettings();
           })
       );
