@@ -540,6 +540,9 @@ function geo_check(input_country, investor_geo) {
   if (
     investor_geo.some((geo) => geo.includes("globally")) ||
     investor_geo.some((geo) => geo.includes("agnostic")) ||
+    investor_geo.some((geo) => geo.includes("global")) ||
+    investor_geo.some((geo) => geo.includes("worldwide")) ||
+    investor_geo.some((geo) => geo.includes("agnostically")) ||
     investor_geo.some((geo) => geo.includes("world-wide"))
   ) {
     return true;

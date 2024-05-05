@@ -317,11 +317,11 @@ export class FindInvestorModal extends Modal {
           this.close();
           this.onsubmit(
             this.company +
-              ", " +
+              "//-- " +
               this.stage +
-              ", " +
+              "//-- " +
               this.location +
-              ", " +
+              "//-- " +
               this.isFocused
           );
         });

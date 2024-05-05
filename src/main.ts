@@ -733,7 +733,7 @@ export default class VCCopilotPlugin extends Plugin {
       editorCallback: (editor: Editor) => {
         const inputModal = new FindInvestorModal(this.app, (input) => {
           // Handle the submitted text here
-          let result = input.split(", ");
+          let result = input.split("//-- ");
           let company = result[0];
           let stage = result[1];
           let location = result[2];
@@ -1028,6 +1028,8 @@ export default class VCCopilotPlugin extends Plugin {
     let position = editor.getCursor();
 
     let connected_investors = await this.get_all_investors(isFocused);
+    console.log(connected_investors.length);
+
     let connected_investors_json: any = [];
     for (let [i, connected_investor] of Object.entries(connected_investors)) {
       let name = connected_investor["name"];
