@@ -70,7 +70,7 @@ This plugin uses GPT-4 to support a venture capitalist (VC) with some of their d
 
   - `Cmd + P` -> Evaluate Startup Defensibility -> copy a description of the startup as detailed as possible
 
-- To use the `Find Investors for Startup` make sure that the VC connections you want to be considered do have `#network/connected` and `#Person/VC` in their notes. The note must be summarized with the "summarize VCs" functionality or you should have your note in the same format at least otherwise you won't get the best investors to share the startup with.
+- To use the `Find Investors for Startup` make sure that the VC connections you want to be considered do have `#network/connected` and `#Person/VC` in their notes. The note must be summarized with the "summarize VCs" functionality or you should have your note in the same format at least otherwise you won't get the best investors to share the startup with. To have a "focused search", the connections you want to include should have either `#network/strong`or `#testRelation` tags.
 
 ## External Tools Used
 
