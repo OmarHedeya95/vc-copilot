@@ -16445,7 +16445,7 @@ var FireFliesTemp = class extends import_obsidian2.Modal {
     });
   }
 };
-var SpokeModal = class extends import_obsidian2.Modal {
+var MeetingBaasModal = class extends import_obsidian2.Modal {
   constructor(app2, onsubmit) {
     super(app2);
     this.onsubmit = onsubmit;
@@ -16453,7 +16453,7 @@ var SpokeModal = class extends import_obsidian2.Modal {
   }
   onOpen() {
     const { contentEl } = this;
-    let title = "Summarise the call recorded by Spoke.app";
+    let title = "Summarise the call recorded by MeetingBaas.app";
     contentEl.createEl("h2", { text: title });
     new import_obsidian2.Setting(contentEl)
       .setName("Meeting name")
@@ -19187,9 +19187,9 @@ var VCCopilotPlugin = class extends import_obsidian4.Plugin {
     });
     this.addCommand({
       id: "summarise-meetingbaas-meeting",
-      name: "Spoke Call Summary",
+      name: "MeetingBaas Call Summary",
       editorCallback: (editor) => {
-        const inputModal = new SpokeModal(this.app, (input) => {
+        const inputModal = new MeetingBaasModal(this.app, (input) => {
           console.log("Submitted text:", input);
           let result = input.split(", ");
           let meeting_name = result[0];
@@ -19994,8 +19994,8 @@ Special Info: ${speciality}`);
       this.status.setAttr("title", "Copilot is ready");
     } catch (error) {
       clearInterval(loadingInterval);
-      console.log(`Error during Spoke summary: ${error}`);
-      new import_obsidian4.Notice(`Error during Spoke summary`);
+      console.log(`Error during MeetingBaas summary: ${error}`);
+      new import_obsidian4.Notice(`Error during MeetingBaas summary`);
     }
   }
   async market_research(industry, editor) {
