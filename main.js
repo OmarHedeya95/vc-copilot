@@ -19186,7 +19186,7 @@ var VCCopilotPlugin = class extends import_obsidian4.Plugin {
       },
     });
     this.addCommand({
-      id: "summarise-spoke-meeting",
+      id: "summarise-meetingbaas-meeting",
       name: "Spoke Call Summary",
       editorCallback: (editor) => {
         const inputModal = new SpokeModal(this.app, (input) => {
@@ -19195,7 +19195,7 @@ var VCCopilotPlugin = class extends import_obsidian4.Plugin {
           let meeting_name = result[0];
           let isDetailed = result[1].trim() == "true" ? true : false;
           let model_name = result[2].trim();
-          this.summarize_spoke_meeting(
+          this.summarize_meetingbaas_meeting(
             editor,
             meeting_name,
             isDetailed,
@@ -19885,7 +19885,7 @@ Special Info: ${speciality}`);
     }
     return extended_paragraphs;
   }
-  async spoke_find_recording_id(meeting_name) {
+  async meetingbaas_find_recording_id(meeting_name) {
     let response = await (0, import_obsidian4.request)({
       url: `https://api.spoke.app/projects/search?name=${meeting_name}&page=0&page_size=10&workspace_id=93424`,
       method: "GET",
@@ -19898,7 +19898,7 @@ Special Info: ${speciality}`);
     console.log(`${result["hits"][0]["document"]["id"]}`);
     return result["hits"][0]["document"]["id"];
   }
-  async spoke_details(meeting_id) {
+  async meetingbaas_details(meeting_id) {
     let response = await (0, import_obsidian4.request)({
       url: `https://api.spoke.app/projects/complete/${meeting_id}`,
       method: "GET",
@@ -19935,14 +19935,14 @@ Special Info: ${speciality}`);
     }
     return paragraphs;
   }
-  async summarize_spoke_meeting(editor, meeting_name, isDetailed, model_name) {
+  async summarize_meetingbaas_meeting(editor, meeting_name, isDetailed, model_name) {
     let cursor_position = editor.getCursor();
     let loadingInterval = this.create_loading_interval(
       "Summarizing sections of the transcript"
     );
     try {
-      let meeting_id = await this.spoke_find_recording_id(meeting_name);
-      let paragraphs = await this.spoke_details(meeting_id);
+      let meeting_id = await this.meetingbaas_find_recording_id(meeting_name);
+      let paragraphs = await this.meetingbaas_details(meeting_id);
       let final_summary = "";
       this.status.setText(
         `\u{1F9D1}\u200D\u{1F680} \u{1F50E}: VC Copilot summarizing sections of the transcript of ${meeting_name}...`

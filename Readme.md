@@ -72,7 +72,8 @@ This plugin uses GPT-4 to support a venture capitalist (VC) with some of their d
 
 - To use the `Find Investors for Startup` make sure that the VC connections you want to be considered do have `#network/connected` and `#Person/VC` in their notes. The note must be summarized with the "summarize VCs" functionality or you should have your note in the same format at least otherwise you won't get the best investors to share the startup with. To have a "focused search", the connections you want to include should have either `#network/strong`or `#testRelation` tags.
 
-## External Tools Used
+## External Tools and APIs Used
 
-- OpenAI; providing GPT-4
-- Affinity.co; using their APIs to push data to their CRM
+- [OpenAI](https://openai.com/); providing GPT-4
+- [Affinity.co](https://www.affinity.co/); using their APIs to push data to their CRM
+- [MeetingBaas](https://meetingbaas.com/); using their API to record meetings with meeting bots, and then fetch meeting data
