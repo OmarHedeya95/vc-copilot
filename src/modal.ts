@@ -150,7 +150,7 @@ export class FireFliesTemp extends Modal {
   }
 }
 
-export class SpokeModal extends Modal {
+export class MeetingBaasModal extends Modal {
   input: string;
   onsubmit: (input: string) => void;
   meeting_name: string;
@@ -165,7 +165,7 @@ export class SpokeModal extends Modal {
 
   onOpen() {
     const { contentEl } = this;
-    let title = "Summarise the call recorded by Spoke.app";
+    let title = "Summarise the call recorded by MeetingBaas.com";
     contentEl.createEl("h2", { text: title });
 
     new Setting(contentEl).setName("Meeting name").addText((text) =>
